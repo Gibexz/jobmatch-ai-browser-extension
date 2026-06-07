@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=500">
+  <title>JobMatch AI</title>
+  <link rel="stylesheet" href="popup.css">
+  <!--
+    Libraries loaded as classic scripts BEFORE the ES module script.
+    The module (popup.js) accesses them via globalThis.pdfjsLib etc.
+  -->
+  <script src="../lib/pdf.min.js"></script>
+  <script src="../lib/mammoth.min.js"></script>
+  <script src="../lib/xlsx.min.js"></script>
+</head>
+<body>
+
+<div class="popup-wrap">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────────── -->
+  <header class="popup-header">
+    <span class="logo">JobMatch AI</span>
+    <button class="icon-btn" id="open-settings" title="Settings (⚙)">⚙</button>
+  </header>
+
+  <!-- ── Unknown site banner ────────────────────────────────────────────────── -->
+  <div class="unknown-banner hidden" id="unknown-banner">
+    <span>This site isn't recognised as a job site.</span>
+    <button class="btn-secondary btn-sm" id="btn-add-site">Add as job site</button>
+  </div>
+
+  <!-- ── Tab bar ────────────────────────────────────────────────────────────── -->
+  <nav class="tabs" role="tablist">
+    <button class="tab-btn active" data-tab="job-analysis"  role="tab" aria-selected="true"  aria-controls="panel-job-analysis">Job Analysis</button>
+    <button class="tab-btn"        data-tab="form-fill"     role="tab" aria-selected="false" aria-controls="panel-form-fill">Form Fill</button>
+    <button class="tab-btn"        data-tab="sponsorship"   role="tab" aria-selected="false" aria-controls="panel-sponsorship">Sponsorship</button>
+    <button class="tab-btn"        data-tab="tracker"       role="tab" aria-selected="false" aria-controls="panel-tracker">Tracker</button>
+  </nav>
+
+  <!-- ── Tab panels ─────────────────────────────────────────────────────────── -->
+  <main class="tab-panels">
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         TAB 1 — Job Analysis
+         ════════════════════════════════════════════════════════════════════════ -->
+    <section class="tab-panel active" id="panel-job-analysis" role="tabpanel">
+
+      <!-- Active CV bar -->
+      <div class="cv-bar">
+        <span class="cv-label">Active CV:</span>
+        <span class="cv-name" id="active-cv-name">None — add one in Settings</span>
+        <button class="btn-ghost btn-sm" id="btn-change-cv">Change</button>
+      </div>
+
+      <!-- Analyse button -->
+      <div class="action-row">
+        <button class="btn-primary" id="btn-analyse">Analyse this job</button>
+        <div class="spinner hidden" id="spinner-analyse" aria-label="Analysing…"></div>
+      </div>
+
+      <!-- Error area -->
+      <div class="error-box hidden" id="error-analyse" role="alert">
+        <span id="error-analyse-msg"></span>
+        <button class="btn-ghost btn-sm error-retry hidden" id="retry-analyse">Retry</button>
+      </div>
+
+      <!-- Results (hidden until analysis completes) -->
+      <div id="results-job-analysis" class="hidden">
+
+        <!-- Match score card -->
+        <div class="score-card">
+          <div class="score-number" id="match-score">—</div>
+          <div class="score-meta">
+            <div class="score-label">Match Score</div>
+            <div class="score-bar-wrap"><div class="score-bar" id="score-bar" style="width:0%"></div></div>
+            <div id="score-counts" style="font-size:12px;color:var(--muted);margin-top:4px;"></div>
+          </div>
+        </div>
+
+        <!-- Tier breakdown -->
+        <div class="tiers" id="match-tiers"></div>
+
+        <!-- Save to tracker prompt -->
+        <div class="save-prompt hidden" id="save-prompt">
+          <span>Save this application to your tracker?</span>
+          <button class="btn-primary btn-sm" id="btn-save-app">Yes, save</button>
+          <button class="btn-ghost btn-sm"   id="btn-dismiss-save">No</button>
+        </div>
+
+        <!-- Optimised CV section -->
+        <div class="section-card" id="section-optimise">
+          <div class="section-hd">
+            <span>Optimised CV</span>
+            <button class="btn-secondary btn-sm" id="btn-optimise">Generate</button>
+          </div>
+          <div class="format-row">
+            <span class="format-label">Format:</span>
+            <div class="format-pills" id="optimise-format-pills" role="group" aria-label="CV format">
+              <button class="format-pill active" data-format="auto">Auto</button>
+              <button class="format-pill" data-format="standard">Standard</button>
+              <button class="format-pill" data-format="star">STAR</button>
+            </div>
+          </div>
+          <div class="format-rec hidden" id="optimise-format-rec" role="status"></div>
+          <div class="section-body hidden" id="optimise-body">
+            <div class="spinner hidden" id="spinner-optimise"></div>
+            <div class="error-box hidden" id="error-optimise" role="alert">
+              <span id="error-optimise-msg"></span>
+              <button class="btn-ghost btn-sm error-retry hidden" id="retry-optimise">Retry</button>
+            </div>
+            <div id="diff-view" class="diff-view hidden"></div>
+            <div class="action-row mt-8 hidden" id="optimise-actions">
+              <button class="btn-primary btn-sm" id="btn-save-optimised">Save approved changes</button>
+              <button class="btn-ghost   btn-sm" id="btn-discard-optimised">Discard</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Document generation -->
+        <div class="section-card">
+          <div class="section-hd"><span id="doc-section-label">Document</span></div>
+          <div class="section-body">
+            <div class="doc-toggle" role="group" aria-label="Document type">
+              <button class="toggle-btn active" data-doc="cover-letter">Cover Letter</button>
+              <button class="toggle-btn"        data-doc="supporting-statement">Supporting Statement</button>
+            </div>
+            <div class="action-row">
+              <button class="btn-secondary btn-sm" id="btn-generate-doc">Generate</button>
+              <div class="spinner hidden" id="spinner-doc"></div>
+              <button class="btn-ghost btn-sm hidden" id="btn-cancel-doc">Cancel</button>
+            </div>
+            <textarea class="doc-output hidden" id="doc-output"
+                      placeholder="Generated text will appear here — you can edit before saving."
+                      aria-label="Generated document text"></textarea>
+            <div class="action-row hidden" id="doc-save-row">
+              <button class="btn-primary btn-sm" id="btn-save-doc">Save document</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advisor suggestions -->
+        <details class="advisor-section" id="advisor-section">
+          <summary>💡 Advisor Suggestions <span id="advisor-count" style="font-weight:400;color:var(--muted);font-size:12px;"></span></summary>
+          <div class="advisor-content" id="advisor-content">
+            <div class="spinner hidden" id="spinner-advisor"></div>
+          </div>
+        </details>
+
+      </div><!-- /results-job-analysis -->
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         TAB 2 — Form Fill
+         ════════════════════════════════════════════════════════════════════════ -->
+    <section class="tab-panel" id="panel-form-fill" role="tabpanel">
+
+      <div class="warning-box hidden" id="session-warning" role="alert">
+        <strong>⚠ Logged out?</strong>&nbsp;
+        You appear to be logged out of this site. Please log in and then click Scan again.
+      </div>
+
+      <div class="format-row">
+        <span class="format-label">Answer style:</span>
+        <div class="format-pills" id="fill-format-pills" role="group" aria-label="Answer format">
+          <button class="format-pill active" data-format="auto">Auto</button>
+          <button class="format-pill" data-format="star">STAR</button>
+          <button class="format-pill" data-format="narrative">Narrative</button>
+        </div>
+      </div>
+      <div class="format-rec hidden" id="fill-format-rec" role="status"></div>
+      <div class="action-row">
+        <button class="btn-primary" id="btn-scan-form">Scan form</button>
+        <div class="spinner hidden" id="spinner-scan"></div>
+      </div>
+
+      <div class="error-box hidden" id="error-form" role="alert">
+        <span id="error-form-msg"></span>
+        <button class="btn-ghost btn-sm error-retry hidden" id="retry-scan">Retry</button>
+      </div>
+
+      <div id="fields-wrap" class="hidden">
+        <div class="fields-count" id="fields-count"></div>
+        <div id="fields-list" role="list" aria-label="Detected form fields"></div>
+        <div class="action-row mt-8">
+          <button class="btn-primary" id="btn-fill-form">Fill Form</button>
+          <div class="spinner hidden" id="spinner-fill"></div>
+        </div>
+        <div id="fill-results" class="fill-results hidden"></div>
+      </div>
+
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         TAB 3 — Sponsorship
+         ════════════════════════════════════════════════════════════════════════ -->
+    <section class="tab-panel" id="panel-sponsorship" role="tabpanel">
+
+      <div class="action-row">
+        <button class="btn-primary" id="btn-check-sponsorship">Check sponsorship</button>
+        <div class="spinner hidden" id="spinner-sponsorship"></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">
+        Checks page text → local Register cache → AI gov.uk search.
+      </div>
+      <div id="sponsorship-status" style="font-size:11.5px;color:var(--nhs-blue-mid);min-height:16px;margin-bottom:8px;"></div>
+      <div id="register-info" class="hidden" style="font-size:11px;color:var(--muted);margin-bottom:8px;"></div>
+
+      <!-- Manual employer search — last resort when extraction fails or site is unsupported -->
+      <div class="employer-override-wrap">
+        <div class="employer-override-row">
+          <input type="text" id="employer-override-input"
+                 class="employer-override-input"
+                 placeholder="Or search register by employer name…"
+                 aria-label="Search the register by employer name" />
+          <button class="btn-secondary btn-sm" id="btn-employer-override"
+                  title="Search the Register of Licensed Sponsors with this name">Search</button>
+        </div>
+        <div class="override-hint">Use when the employer name wasn't detected, or to search manually.</div>
+      </div>
+
+      <div class="error-box hidden" id="error-sponsorship" role="alert">
+        <span id="error-sponsorship-msg"></span>
+        <button class="btn-ghost btn-sm error-retry hidden" id="retry-sponsorship">Retry</button>
+      </div>
+
+      <div id="sponsorship-results" class="hidden">
+        <div class="verdict-badge" id="verdict-badge" role="status"></div>
+        <ul class="reasons-list" id="reasons-list" aria-label="Sponsorship reasons"></ul>
+        <div class="source-links" id="source-links"></div>
+        <div class="checklist-status" id="checklist-status"></div>
+      </div>
+
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         TAB 4 — Job Tracker
+         ════════════════════════════════════════════════════════════════════════ -->
+    <section class="tab-panel" id="panel-tracker" role="tabpanel">
+
+      <!-- Analytics -->
+      <div class="analytics-bar" id="analytics-bar" aria-label="Application analytics">
+        <div class="stat-card">
+          <div class="stat-number" id="stat-total">0</div>
+          <div class="stat-label">Total</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-shortlist">0%</div>
+          <div class="stat-label">Shortlist rate</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-interview">0%</div>
+          <div class="stat-label">Interview rate</div>
+        </div>
+        <div class="insight-box hidden" id="tracker-insight"></div>
+      </div>
+
+      <!-- Controls -->
+      <div class="tracker-controls">
+        <select id="stage-filter" aria-label="Filter by stage">
+          <option value="">All stages</option>
+          <option>Applied</option>
+          <option>Shortlisted</option>
+          <option>Interview Scheduled</option>
+          <option>Interview Done</option>
+          <option>Offer</option>
+          <option>Rejected</option>
+        </select>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-secondary btn-sm" id="btn-export-excel">Export Excel</button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="tracker-table-wrap">
+        <table class="tracker-table" id="tracker-table" role="grid">
+          <thead>
+            <tr>
+              <th data-sort="jobTitle">Job Title ↕</th>
+              <th data-sort="companyName">Company</th>
+              <th data-sort="applicationDeadline">Deadline</th>
+              <th data-sort="stage">Stage</th>
+              <th data-sort="matchScore">Score</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tracker-tbody"></tbody>
+        </table>
+        <div class="empty-state hidden" id="tracker-empty">
+          No applications tracked yet. Analyse a job and click "Save to tracker".
+        </div>
+      </div>
+
+    </section>
+  </main><!-- /tab-panels -->
+</div><!-- /popup-wrap -->
+
+<script type="module" src="popup.js"></script>
+</body>
+</html>

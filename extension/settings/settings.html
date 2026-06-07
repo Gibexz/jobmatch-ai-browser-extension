@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JobMatch AI — Settings</title>
+  <link rel="stylesheet" href="settings.css">
+  <script src="../lib/pdf.min.js"></script>
+  <script src="../lib/mammoth.min.js"></script>
+</head>
+<body>
+
+<div class="settings-wrap">
+
+  <header class="settings-header">
+    <span class="logo">JobMatch AI — Settings</span>
+    <span class="version">v1.0</span>
+  </header>
+
+  <nav class="settings-nav" aria-label="Settings sections">
+    <a href="#api-key"      class="nav-item">🔑 API Key</a>
+    <a href="#cv"           class="nav-item">📄 CV Management</a>
+    <a href="#personal"     class="nav-item">👤 Personal Details</a>
+    <a href="#sponsorship"  class="nav-item">📋 Sponsorship Docs</a>
+    <a href="#sites"        class="nav-item">🌐 Job Sites</a>
+    <a href="#alerts"       class="nav-item">🔔 Job Alerts</a>
+    <a href="#goals"        class="nav-item">🎯 Career Goals</a>
+    <a href="#backup"       class="nav-item">💾 Backup & Restore</a>
+  </nav>
+
+  <main class="settings-main">
+
+    <!-- ── 1. API Key ───────────────────────────────────────────────────────── -->
+    <section class="settings-section" id="api-key">
+      <h2>🔑 Anthropic API Key</h2>
+      <div class="warning-box">
+        Your API key is stored locally on this device. Do not share this extension
+        package or your browser profile with others.
+      </div>
+      <div class="field-group">
+        <label for="api-key-input">API Key</label>
+        <div style="display:flex;gap:8px;">
+          <input type="password" id="api-key-input" placeholder="sk-ant-api03-…"
+                 autocomplete="off" aria-label="Anthropic API key" style="flex:1;">
+          <button class="btn-ghost" id="toggle-api-key">Show</button>
+        </div>
+        <div class="field-hint">
+          Get yours at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>
+        </div>
+      </div>
+      <div class="field-hint" id="api-key-status" style="margin-bottom:8px;"></div>
+      <div class="form-actions">
+        <button class="btn-primary"   id="save-api-key">Save API Key</button>
+        <button class="btn-secondary" id="test-api-key">Test connection</button>
+        <span class="save-confirm hidden" id="confirm-api-key">✓ Saved</span>
+        <span class="save-confirm hidden" id="confirm-api-test" style="color:var(--nhs-green);">✓ API key is valid</span>
+        <span class="save-confirm hidden" id="fail-api-test"   style="color:var(--nhs-red);">✗ Invalid key — check and re-save</span>
+      </div>
+    </section>
+
+    <!-- ── 2. CV Management ─────────────────────────────────────────────────── -->
+    <section class="settings-section" id="cv">
+      <h2>📄 CV Management</h2>
+
+      <div class="sub-section">
+        <h3>Add new CV</h3>
+        <div class="field-group">
+          <label for="cv-label">Label (e.g. "NHS Band 6")</label>
+          <input type="text" id="cv-label" placeholder="NHS Band 6">
+        </div>
+        <div class="field-group">
+          <label>Upload file or paste text</label>
+          <input type="file" id="cv-file" accept=".pdf,.docx,.txt"
+                 aria-label="Upload CV file (PDF, DOCX, or TXT)">
+          <span style="display:block;text-align:center;margin:6px 0;color:var(--muted);font-size:13px;">— or paste text below —</span>
+          <textarea id="cv-paste" rows="6" placeholder="Paste your CV text here…"
+                    aria-label="Paste CV text"></textarea>
+        </div>
+        <div id="cv-preview-wrap" class="hidden">
+          <div class="field-hint">Preview (extracted text):</div>
+          <pre id="cv-preview" style="max-height:120px;overflow-y:auto;font-size:12px;background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--border);white-space:pre-wrap;"></pre>
+        </div>
+        <div class="form-actions">
+          <button class="btn-secondary" id="btn-preview-cv">Preview extraction</button>
+          <button class="btn-primary"   id="btn-add-cv">Add CV</button>
+          <span class="save-confirm hidden" id="confirm-add-cv">✓ Added</span>
+        </div>
+      </div>
+
+      <div class="sub-section">
+        <h3>Stored CVs</h3>
+        <div id="cv-list">
+          <div class="empty-state" id="cv-empty">No CVs stored yet.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 3. Personal Details Vault ────────────────────────────────────────── -->
+    <section class="settings-section" id="personal">
+      <h2>👤 Personal Details Vault</h2>
+      <div class="field-hint" style="margin-bottom:12px;">
+        These details are used by the Form Filler to pre-populate application fields.
+      </div>
+
+      <div id="expiry-warnings"></div>
+
+      <fieldset class="settings-fieldset">
+        <legend>Contact Information</legend>
+        <div class="field-row-2">
+          <div class="field-group"><label for="p-name">Full Legal Name</label><input type="text" id="p-name" placeholder="Jane Elizabeth Smith"></div>
+          <div class="field-group"><label for="p-email">Email</label><input type="email" id="p-email" placeholder="jane@example.com"></div>
+        </div>
+        <div class="field-row-2">
+          <div class="field-group"><label for="p-phone">Phone</label><input type="tel" id="p-phone" placeholder="+44 7700 900000"></div>
+          <div class="field-group"><label for="p-ni">National Insurance No.</label>
+            <div style="display:flex;gap:6px;">
+              <input type="password" id="p-ni" placeholder="AB 12 34 56 C" autocomplete="off" style="flex:1;">
+              <button class="btn-ghost btn-sm" id="toggle-ni">Show</button>
+            </div>
+          </div>
+        </div>
+        <div class="field-group"><label for="p-addr1">Address Line 1</label><input type="text" id="p-addr1"></div>
+        <div class="field-row-2">
+          <div class="field-group"><label for="p-addr2">Line 2</label><input type="text" id="p-addr2"></div>
+          <div class="field-group"><label for="p-city">City</label><input type="text" id="p-city" placeholder="London"></div>
+        </div>
+        <div class="field-row-2">
+          <div class="field-group"><label for="p-postcode">Postcode</label><input type="text" id="p-postcode" placeholder="SW1A 1AA"></div>
+          <div class="field-group"><label for="p-country">Country</label><input type="text" id="p-country" value="United Kingdom"></div>
+        </div>
+      </fieldset>
+
+      <fieldset class="settings-fieldset">
+        <legend>Professional Registration</legend>
+        <div class="field-row-3">
+          <div class="field-group">
+            <label for="p-reg-type">Type</label>
+            <select id="p-reg-type">
+              <option value="">— Select —</option>
+              <option>NMC</option><option>HCPC</option><option>GMC</option><option>GDC</option><option>Other</option>
+            </select>
+          </div>
+          <div class="field-group"><label for="p-reg-num">Number</label><input type="text" id="p-reg-num" placeholder="12A3456"></div>
+          <div class="field-group"><label for="p-reg-exp">Expiry Date</label><input type="date" id="p-reg-exp"></div>
+        </div>
+      </fieldset>
+
+      <fieldset class="settings-fieldset">
+        <legend>Right to Work</legend>
+        <div class="field-row-3">
+          <div class="field-group">
+            <label for="p-rtw-status">Status</label>
+            <select id="p-rtw-status">
+              <option value="">— Select —</option>
+              <option>UK Citizen</option><option>ILR</option><option>Skilled Worker Visa</option><option>Other</option>
+            </select>
+          </div>
+          <div class="field-group"><label for="p-visa-type">Visa Type</label><input type="text" id="p-visa-type" placeholder="Skilled Worker"></div>
+          <div class="field-group"><label for="p-visa-exp">Visa Expiry</label><input type="date" id="p-visa-exp"></div>
+        </div>
+      </fieldset>
+
+      <fieldset class="settings-fieldset">
+        <legend>Referee 1</legend>
+        <div class="field-row-2">
+          <div class="field-group"><label for="r1-name">Name</label><input type="text" id="r1-name"></div>
+          <div class="field-group"><label for="r1-title">Job Title</label><input type="text" id="r1-title"></div>
+        </div>
+        <div class="field-row-2">
+          <div class="field-group"><label for="r1-org">Organisation</label><input type="text" id="r1-org"></div>
+          <div class="field-group"><label for="r1-email">Email</label><input type="email" id="r1-email"></div>
+        </div>
+        <div class="field-row-2">
+          <div class="field-group"><label for="r1-phone">Phone</label><input type="tel" id="r1-phone"></div>
+          <div class="field-group"><label for="r1-rel">Relationship</label><input type="text" id="r1-rel" placeholder="Line Manager"></div>
+        </div>
+      </fieldset>
+
+      <fieldset class="settings-fieldset">
+        <legend>Referee 2</legend>
+        <div class="field-row-2">
+          <div class="field-group"><label for="r2-name">Name</label><input type="text" id="r2-name"></div>
+          <div class="field-group"><label for="r2-title">Job Title</label><input type="text" id="r2-title"></div>
+        </div>
+        <div class="field-row-2">
+          <div class="field-group"><label for="r2-org">Organisation</label><input type="text" id="r2-org"></div>
+          <div class="field-group"><label for="r2-email">Email</label><input type="email" id="r2-email"></div>
+        </div>
+        <div class="field-row-2">
+          <div class="field-group"><label for="r2-phone">Phone</label><input type="tel" id="r2-phone"></div>
+          <div class="field-group"><label for="r2-rel">Relationship</label><input type="text" id="r2-rel" placeholder="Former Supervisor"></div>
+        </div>
+      </fieldset>
+
+      <fieldset class="settings-fieldset">
+        <legend>Diversity Preferences</legend>
+        <div class="field-hint">These are used by the Form Filler for optional equal opportunities fields.</div>
+        <label class="checkbox-label" style="margin:8px 0 12px;">
+          <input type="checkbox" id="p-diversity-prefer-not"> Prefer not to say for all diversity fields
+        </label>
+        <div class="field-row-3" id="diversity-fields">
+          <div class="field-group"><label for="p-gender">Gender</label><input type="text" id="p-gender"></div>
+          <div class="field-group"><label for="p-ethnicity">Ethnicity</label><input type="text" id="p-ethnicity"></div>
+          <div class="field-group"><label for="p-disability">Disability status</label><input type="text" id="p-disability"></div>
+          <div class="field-group"><label for="p-sexuality">Sexual orientation</label><input type="text" id="p-sexuality"></div>
+          <div class="field-group"><label for="p-religion">Religion / belief</label><input type="text" id="p-religion"></div>
+          <div class="field-group">
+            <label for="p-driving">Driving licence</label>
+            <select id="p-driving">
+              <option value="">— Select —</option>
+              <option>Full UK</option><option>Provisional</option><option>International</option><option>None</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="form-actions">
+        <button class="btn-primary" id="save-personal">Save Personal Details</button>
+        <span class="save-confirm hidden" id="confirm-personal">✓ Saved</span>
+      </div>
+    </section>
+
+    <!-- ── 4. Sponsorship Document Checklist ─────────────────────────────────── -->
+    <section class="settings-section" id="sponsorship">
+      <h2>📋 Sponsorship Document Checklist</h2>
+      <div class="field-hint">Track your UK Skilled Worker visa sponsorship documents.</div>
+      <div id="checklist-list"></div>
+      <div class="form-actions">
+        <button class="btn-primary" id="save-checklist">Save Checklist</button>
+        <span class="save-confirm hidden" id="confirm-checklist">✓ Saved</span>
+      </div>
+    </section>
+
+    <!-- ── 5. Job Sites ──────────────────────────────────────────────────────── -->
+    <section class="settings-section" id="sites">
+      <h2>🌐 Job Sites</h2>
+
+      <div class="sub-section">
+        <h3>Add custom site</h3>
+        <div class="field-row-3">
+          <div class="field-group"><label for="site-name">Site name</label><input type="text" id="site-name" placeholder="My Job Board"></div>
+          <div class="field-group"><label for="site-pattern">URL pattern</label><input type="text" id="site-pattern" placeholder="https://www.example.com/*"></div>
+          <div class="field-group">
+            <label for="site-type">Type</label>
+            <select id="site-type">
+              <option value="both">Both (listing + form)</option>
+              <option value="listing">Listing only</option>
+              <option value="form">Form only</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary btn-sm" id="btn-add-site">Add site</button>
+          <span class="save-confirm hidden" id="confirm-site">✓ Added</span>
+        </div>
+      </div>
+
+      <div class="sub-section">
+        <h3>Built-in sites</h3>
+        <div id="builtin-sites-list"></div>
+      </div>
+      <div class="sub-section">
+        <h3>Custom sites</h3>
+        <div id="custom-sites-list">
+          <div class="empty-state" id="custom-sites-empty">No custom sites added yet.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 6. Job Alert Profiles ─────────────────────────────────────────────── -->
+    <section class="settings-section" id="alerts">
+      <h2>🔔 Job Alert Profiles</h2>
+      <div class="field-hint">JobMatch AI checks these searches every 30 minutes and notifies you of new matches.</div>
+
+      <div class="sub-section">
+        <h3>Add alert</h3>
+        <div class="field-row-2">
+          <div class="field-group"><label for="alert-keywords">Keywords (comma-separated)</label><input type="text" id="alert-keywords" placeholder="Band 6 Nurse, OT, Radiographer"></div>
+          <div class="field-group"><label for="alert-location">Location</label><input type="text" id="alert-location" placeholder="London"></div>
+        </div>
+        <div class="field-row-2">
+          <div class="field-group"><label for="alert-salary-min">Salary min (£)</label><input type="number" id="alert-salary-min" placeholder="35000"></div>
+          <div class="field-group"><label for="alert-salary-max">Salary max (£)</label><input type="number" id="alert-salary-max" placeholder="45000"></div>
+        </div>
+        <label class="checkbox-label">
+          <input type="checkbox" id="alert-sponsorship"> Sponsorship required
+        </label>
+        <div class="form-actions" style="margin-top:10px;">
+          <button class="btn-primary btn-sm" id="btn-add-alert">Add alert</button>
+          <span class="save-confirm hidden" id="confirm-alert">✓ Added</span>
+        </div>
+      </div>
+
+      <div class="sub-section">
+        <h3>Active alerts</h3>
+        <div id="alerts-list">
+          <div class="empty-state" id="alerts-empty">No alert profiles yet.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 7. Career Goals ───────────────────────────────────────────────────── -->
+    <section class="settings-section" id="goals">
+      <h2>🎯 Career Goals</h2>
+      <div class="field-hint">Goals saved from advisor suggestions appear here.</div>
+      <div id="goals-list">
+        <div class="empty-state" id="goals-empty">No goals saved yet. Analyse a job and accept suggestions from the Advisor panel.</div>
+      </div>
+    </section>
+
+    <!-- ── 8. Backup & Restore ───────────────────────────────────────────────── -->
+    <section class="settings-section" id="backup">
+      <h2>💾 Backup & Restore</h2>
+
+      <div class="info-box">
+        <strong>What's included in a backup:</strong> All CVs · Tracker applications ·
+        Personal details · Sponsorship checklist · Career goals · Custom job sites ·
+        Alert profiles · Settings.<br>
+        <strong>Not included:</strong> Your Anthropic API key — re-enter this after restoring.
+      </div>
+
+      <div class="form-actions" style="margin-top:14px;">
+        <button class="btn-primary" id="btn-export-backup">Export Backup</button>
+        <span style="color:var(--muted);align-self:center;font-size:13px;">or</span>
+        <label class="btn-secondary" style="cursor:pointer;">
+          Import Backup
+          <input type="file" id="backup-file" accept=".json" style="display:none;">
+        </label>
+        <span class="save-confirm hidden" id="confirm-backup">✓ Imported</span>
+      </div>
+      <div class="warning-box hidden" id="backup-error" style="margin-top:10px;"></div>
+    </section>
+
+  </main><!-- /settings-main -->
+</div><!-- /settings-wrap -->
+
+<script type="module" src="settings.js"></script>
+</body>
+</html>

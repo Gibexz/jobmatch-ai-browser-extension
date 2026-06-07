@@ -1,0 +1,15 @@
+{
+  "name": "jobmatch-ai",
+  "version": "1.0.0",
+  "description": "JobMatch AI — Chrome Extension build scripts and library management",
+  "scripts": {
+    "setup": "node scripts/build.js && node scripts/generate_icons.js",
+    "libs": "node scripts/build.js",
+    "icons": "node scripts/generate_icons.js"
+  },
+  "dependencies": {
+    "pdfjs-dist": "3.11.174",
+    "mammoth": "^1.7.0",
+    "xlsx": "0.18.5"
+  }
+}

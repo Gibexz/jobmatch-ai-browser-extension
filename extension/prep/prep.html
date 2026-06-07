@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JobMatch AI — Interview Prep</title>
+  <style>
+    :root {
+      --nhs-blue: #003087; --nhs-blue-mid: #005eb8;
+      --nhs-green: #00703c; --nhs-orange: #f47738; --nhs-red: #d4351c;
+      --nhs-pale: #f0f4f5; --border: #d8dde0; --text: #212b32;
+      --muted: #768692; --white: #ffffff; --surface: #f8f9fa; --radius: 6px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; color: var(--text); background: var(--surface); }
+    header { background: var(--nhs-blue); color: var(--white); padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; }
+    header .logo { font-size: 16px; font-weight: 700; }
+    header .job-title-hd { font-size: 14px; opacity: .8; }
+    .prep-wrap { max-width: 860px; margin: 0 auto; padding: 24px; }
+    .card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; }
+    .card h2 { font-size: 16px; font-weight: 700; color: var(--nhs-blue); margin-bottom: 14px; border-bottom: 2px solid var(--nhs-pale); padding-bottom: 8px; }
+
+    /* Loading */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 32px; height: 32px; border: 4px solid var(--border); border-top-color: var(--nhs-blue); border-radius: 50%; animation: spin .85s linear infinite; margin: 20px auto; }
+    .loading-msg { text-align: center; color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+    /* Q&A */
+    .question-item { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; overflow: hidden; }
+    .question-hd { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; background: var(--white); user-select: none; }
+    .question-hd:hover { background: var(--nhs-pale); }
+    .cat-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; }
+    .cat-Clinical    { background: #e8f4fd; color: #00527a; }
+    .cat-Competency  { background: #fff3e0; color: #8a4d00; }
+    .cat-NHS-Values  { background: #e4f5eb; color: #00592a; }
+    .cat-Scenario    { background: #f3e8fd; color: #5a007a; }
+    .cat-Motivational{ background: #fff9c4; color: #7d6200; }
+    .question-text { flex: 1; font-weight: 600; font-size: 13.5px; }
+    .practised-cb { margin-left: auto; display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+    .question-body { padding: 14px; background: var(--surface); border-top: 1px solid var(--border); display: none; }
+    .question-body.open { display: block; }
+    .answer-box { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; margin-bottom: 10px; }
+    .notes-box { font-size: 12px; color: var(--muted); font-style: italic; border-left: 3px solid var(--border); padding: 4px 10px; margin-bottom: 10px; }
+
+    /* Follow-up chat */
+    .followup-area { display: flex; gap: 8px; margin-top: 8px; }
+    .followup-input { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-family: inherit; }
+    .followup-response { background: #e8f4fd; border-left: 3px solid var(--nhs-blue-mid); padding: 10px 12px; border-radius: 0 var(--radius) var(--radius) 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; margin-top: 8px; }
+
+    /* Checklist */
+    .checklist-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+    .checklist-item:last-child { border-bottom: none; }
+    .checklist-item input[type=checkbox] { flex-shrink: 0; width: 16px; height: 16px; }
+    .checklist-item label { flex: 1; cursor: pointer; }
+    .checklist-item.done label { text-decoration: line-through; color: var(--muted); }
+
+    /* Red flags */
+    .redflag-item { border: 1px solid var(--border); border-left: 4px solid var(--nhs-orange); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 8px; }
+    .redflag-item.prepared { border-left-color: var(--nhs-green); opacity: .65; }
+    .redflag-issue { font-weight: 700; font-size: 13px; margin-bottom: 5px; }
+    .redflag-response { font-size: 13px; color: var(--text); line-height: 1.5; }
+
+    /* Resources */
+    .resource-item { display: flex; gap: 12px; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .resource-item:last-child { border-bottom: none; }
+    .res-cat { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px; background: var(--nhs-pale); color: var(--nhs-blue); white-space: nowrap; flex-shrink: 0; }
+    .res-body { flex: 1; }
+    .res-title a { color: var(--nhs-blue-mid); font-weight: 600; }
+    .res-rel { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* Buttons */
+    .btn-primary, .btn-secondary, .btn-ghost {
+      display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px;
+      border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer;
+      border: 2px solid transparent; transition: background .12s;
+    }
+    .btn-primary   { background: var(--nhs-blue); color: var(--white); }
+    .btn-secondary { background: var(--white); color: var(--nhs-blue); border-color: var(--nhs-blue); }
+    .btn-ghost     { background: none; color: var(--muted); border-color: var(--border); }
+    .btn-sm        { padding: 4px 10px; font-size: 12px; }
+    .hidden { display: none !important; }
+    .error-box { background: #fde8e6; border-left: 4px solid var(--nhs-red); padding: 10px 14px; border-radius: var(--radius); font-size: 13px; color: #5a0500; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="logo">JobMatch AI — Interview Prep</span>
+    <span class="job-title-hd" id="hd-job-title"></span>
+  </header>
+
+  <div class="prep-wrap">
+
+    <!-- Loading state -->
+    <div id="loading-state">
+      <div class="spinner"></div>
+      <div class="loading-msg" id="loading-msg">Generating your tailored interview prep session…</div>
+    </div>
+
+    <div class="error-box hidden" id="prep-error"></div>
+
+    <!-- Generated content -->
+    <div id="prep-content" class="hidden">
+
+      <!-- Header info -->
+      <div class="card" id="prep-meta" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-weight:700;font-size:16px;" id="meta-job-title"></div>
+          <div style="color:var(--muted);font-size:13px;" id="meta-company"></div>
+        </div>
+        <button class="btn-secondary btn-sm" id="btn-regenerate">↻ Regenerate</button>
+      </div>
+
+      <!-- Questions -->
+      <div class="card">
+        <h2>Interview Questions <span id="q-count" style="font-weight:400;color:var(--muted);font-size:13px;"></span></h2>
+        <div id="questions-list"></div>
+      </div>
+
+      <!-- Research checklist -->
+      <div class="card">
+        <h2>Research Checklist</h2>
+        <div id="research-list"></div>
+      </div>
+
+      <!-- Red flags -->
+      <div class="card">
+        <h2>Potential Interview Challenges</h2>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Weak points the interviewer might probe — with suggested responses.</p>
+        <div id="redflags-list"></div>
+      </div>
+
+      <!-- Study resources -->
+      <div class="card">
+        <h2>Recommended Study</h2>
+        <div id="resources-list"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module" src="prep.js"></script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+{
+  "manifest_version": 3,
+  "name": "JobMatch AI",
+  "version": "1.0.0",
+  "description": "AI-powered NHS job application assistant — CV matching, form filling, sponsorship analysis, and interview prep.",
+
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "alarms",
+    "notifications",
+    "tabs"
+  ],
+
+  "host_permissions": [
+    "https://www.jobs.nhs.uk/*",
+    "https://jobs.nhs.uk/*",
+    "https://www.nhsjobs.com/*",
+    "https://www.trac.jobs/*",
+    "https://www.indeed.co.uk/*",
+    "https://www.reed.co.uk/*",
+    "https://www.linkedin.com/jobs/*",
+    "https://www.totaljobs.com/*",
+    "https://www.cv-library.co.uk/*",
+    "https://findajob.dwp.gov.uk/*",
+    "https://api.anthropic.com/*",
+    "https://www.gov.uk/*",
+    "https://assets.publishing.service.gov.uk/*",
+    "<all_urls>"
+  ],
+
+  "background": {
+    "service_worker": "background/service_worker.js",
+    "type": "module"
+  },
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "JobMatch AI",
+    "default_icon": {
+      "16":  "icons/icon16.png",
+      "48":  "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.jobs.nhs.uk/*",
+        "https://jobs.nhs.uk/*",
+        "https://www.nhsjobs.com/*",
+        "https://www.trac.jobs/*",
+        "https://www.indeed.co.uk/*",
+        "https://www.reed.co.uk/*",
+        "https://www.linkedin.com/jobs/*",
+        "https://www.totaljobs.com/*",
+        "https://www.cv-library.co.uk/*",
+        "https://findajob.dwp.gov.uk/*"
+      ],
+      "js": [
+        "content_scripts/extract_job.js",
+        "content_scripts/extract_form.js",
+        "content_scripts/fill_form.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_scripts/detect_unknown.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+
+  "icons": {
+    "16":  "icons/icon16.png",
+    "48":  "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

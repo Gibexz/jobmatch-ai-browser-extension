@@ -1,0 +1,102 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  review:
+    name: Claude PR Review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build diff (extension + agents + manifest only)
+        id: diff
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD \
+            -- extension/ .claude/agents/ manifest.json .gitignore \
+            > pr_diff.txt
+          LINES=$(wc -l < pr_diff.txt)
+          echo "Diff is $LINES lines"
+          # Truncate to 15 000 chars to stay within Claude's input budget
+          python3 -c "
+          with open('pr_diff.txt') as f:
+              content = f.read(15000)
+          with open('pr_diff_truncated.txt', 'w') as f:
+              f.write(content)
+          "
+
+      - name: Run Claude review
+        id: claude_review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          DIFF=$(cat pr_diff_truncated.txt)
+          DIFF_JSON=$(python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" <<< "$DIFF")
+
+          SYSTEM_PROMPT="You are the PR Reviewer for JobMatch AI, a Chrome Extension (Manifest V3) that calls the Anthropic Claude API. Review ONLY for: (1) SECURITY — API key exposure via console.log or storage writes, innerHTML XSS in content scripts, new unlisted host_permissions domains, raw credentials in code; (2) AGENT BOUNDARIES — popup.js must contain no business logic or API calls, agents must not call each other's internals, content scripts must not perform agent-level computation; (3) HARD BUSINESS RULES — isDeclaration form fields must never be auto-filled (always null), original CV must never be overwritten without a new label, optimised CV must never contain fabricated content not from the user's CV, maxTokens on full CV rewrite calls must be at least 4000. Ignore all style, formatting, naming, and test coverage issues. Output STATUS: PASS or STATUS: FAIL on the last line."
+
+          curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "{
+              \"model\": \"claude-sonnet-4-6\",
+              \"max_tokens\": 1500,
+              \"system\": $(echo "$SYSTEM_PROMPT" | python3 -c \"import json,sys; print(json.dumps(sys.stdin.read()))\"),
+              \"messages\": [{
+                \"role\": \"user\",
+                \"content\": \"Review this PR diff for the JobMatch AI Chrome Extension:\\n\\n$DIFF_JSON\"
+              }]
+            }" \
+            | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          if 'content' in r:
+              print(r['content'][0]['text'])
+          else:
+              print('ERROR: Could not get review from Claude.')
+              print(json.dumps(r, indent=2))
+              sys.exit(1)
+          " > review.txt
+
+          echo "--- Review output ---"
+          cat review.txt
+
+      - name: Post review as PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const review = fs.readFileSync('review.txt', 'utf8');
+            const status = review.includes('STATUS: FAIL') ? '🔴 FAIL' : '🟢 PASS';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: [
+                `## JobMatch AI — Automated PR Review  ${status}`,
+                '',
+                review,
+                '',
+                '---',
+                '*Reviewed by Claude Sonnet via [pr-reviewer agent](.claude/agents/pr-reviewer.md)*'
+              ].join('\n')
+            });
+
+      - name: Enforce status gate
+        run: |
+          if grep -q "STATUS: FAIL" review.txt; then
+            echo "Critical issues found — merge blocked until resolved."
+            exit 1
+          fi
+          echo "No critical issues — review passed."

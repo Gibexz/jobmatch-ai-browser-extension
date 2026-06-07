@@ -1,0 +1,29 @@
+node_modules/
+extension/lib/
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Chrome Extension signing key — NEVER commit
+*.pem
+*.crx
+
+# Local environment / secrets
+.env
+.env.local
+.env.*
+
+# Claude Code personal session data
+# .claude/agents/ IS committed — those are project agent definitions
+# Session transcripts and memory files are NOT
+.claude/projects/
+.claude/settings.local.json
+
+# Build output
+dist/
+build/
+
+# Personal / local files not for public repo
+memory/
+JobMatchAI_Prompt_Final.txt
