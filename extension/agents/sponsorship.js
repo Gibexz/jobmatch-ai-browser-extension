@@ -79,9 +79,10 @@ function parseCSVLine(line) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Route ALL gov.uk fetches through the service worker to avoid the popup's
- * "script-src 'self'" CSP being violated by Link: preload headers that
- * gov.uk attaches to every response (including JSON API endpoints).
+ * Proxy a fetch through the service worker to avoid popup CSP violations.
+ * gov.uk sends "Link: preload" headers on every response; these headers trigger
+ * the extension's "script-src 'self'" CSP when received in the popup context.
+ * The service worker has no extension-page CSP, so requests are safe there.
  *
  * @param {string} url       - Must start with an allow-listed gov.uk domain.
  * @param {object} [headers] - Request headers forwarded to the SW.
@@ -197,7 +198,7 @@ async function fetchAndCacheRegister(onProgress) {
     lastUpdated: Date.now()
   };
 
-  // chrome.storage.local can hold up to 10 MB; ~100k names avg 30 chars ≈ 3 MB
+  // chrome.storage.local limit is 10 MB; ~100k register entries × 30 chars avg ≈ 3 MB — safe
   await chrome.storage.local.set({ [REGISTER_KEY]: entry });
   onProgress?.(`Register cached — ${employers.length.toLocaleString()} licensed sponsors.`);
   return entry;
@@ -331,8 +332,8 @@ function findSimilarEmployers(employerName, register, limit = 8) {
 
 /**
  * Current Skilled Worker visa salary thresholds (UK Home Office, April 2024).
- * These are hardcoded and used for Tier 2 analysis.
- * The thresholds key on the gov.uk guidance page is checked daily during Tier 3.
+ * Hardcoded for Tier 1/2 instant checks — Tier 3 AI search verifies the latest
+ * figures from gov.uk to catch any threshold changes since this was last updated.
  */
 const THRESHOLDS = {
   general:    38700,   // Standard threshold (April 2024)
@@ -361,8 +362,7 @@ function parseSalary(str) {
 function salaryMeetsThreshold(salaryStr) {
   const range = parseSalary(salaryStr);
   if (!range) return null;
-  // Use max because many NHS jobs are salary ranges; either end meeting
-  // the threshold is sufficient for the higher band
+  // Use max: if the upper end of a banded salary meets the threshold the role is eligible
   return range.max >= THRESHOLDS.general;
 }
 
@@ -469,7 +469,7 @@ Status rules:
  */
 export async function analyseSponsorship(jobData, signal, onProgress) {
 
-  // ── TIER 1: Explicit mention in the job page ───────────────────────────────
+  // ── TIER 1: Explicit mention — cheapest check, no API call needed ────────────
   const explicit = jobData.sponsorshipMentions?.explicit;
 
   if (explicit === 'no') {
@@ -513,7 +513,7 @@ export async function analyseSponsorship(jobData, signal, onProgress) {
     };
   }
 
-  // ── TIER 2: Cached Register of Licensed Sponsors + salary check ────────────
+  // ── TIER 2: Cached register lookup — fast, no API call if register is fresh ──
   onProgress?.('Checking Register of Licensed Sponsors…');
 
   const register   = await ensureRegister(onProgress);
@@ -565,7 +565,8 @@ export async function analyseSponsorship(jobData, signal, onProgress) {
     // No similar names found at all — fall through to Tier 3
   }
 
-  // ── Register unavailable or no similar names found — Tier 3 AI search ─────
+  // ── TIER 3: Claude agentic gov.uk search — only reached when register is
+  //    unavailable or no sufficiently similar employer names were found ─────────
   return runTier3AgenticSearch(jobData, register, salaryOk, signal, onProgress);
 }
 

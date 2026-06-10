@@ -34,6 +34,11 @@ export class ClaudeApiError extends Error {
 
 // ── API key retrieval ─────────────────────────────────────────────────────────
 
+/**
+ * Retrieves the stored Anthropic API key.
+ * @returns {Promise<string>}
+ * @throws {ClaudeApiError} if no key is stored
+ */
 async function getApiKey() {
   // Local storage is the source of truth — always check it first.
   // Session storage is an in-memory cache that can hold stale values from
@@ -86,6 +91,10 @@ async function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+/**
+ * Returns true for status codes that warrant a retry with backoff.
+ * 429 = rate limit, 529 = Anthropic overloaded.
+ */
 function isRetryableStatus(status) {
   return status === 429 || status === 529;
 }
@@ -144,7 +153,7 @@ export async function callClaude({ model, system, messages, maxTokens = 2048, si
           res.status
         );
       }
-      await sleep(2 ** attempt * 1000); // 2 s, 4 s, 8 s
+      await sleep(2 ** attempt * 1000); // exponential: 2 s, 4 s, 8 s
       continue;
     }
 
@@ -241,7 +250,7 @@ export async function streamClaude({ model, system, messages, maxTokens = 4096, 
       );
     }
 
-    // Parse Server-Sent Events stream
+    // Parse Server-Sent Events (SSE) stream line by line
     const reader  = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer    = '';

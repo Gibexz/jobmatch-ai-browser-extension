@@ -43,14 +43,14 @@ async function init() {
     }
   } catch (_) {}
 
-  // Try loading existing session first
+  // Load existing session first to avoid a redundant API call on re-open
   $('loading-msg').textContent = 'Loading your interview prep session…';
   try {
     session = await getPrepProgress(appId);
     if (session) {
       renderSession(session);
     } else {
-      // Generate fresh session
+      // No saved session — generate one fresh (takes ~30 s due to parallel Claude calls)
       $('loading-msg').textContent = 'Generating tailored interview prep (this takes ~30 seconds)…';
       session = await generatePrepSession(appId);
       renderSession(session);
@@ -186,7 +186,7 @@ async function sendFollowUp(q) {
     const full = await streamFollowUp(request, context, {
       onChunk: chunk => { respEl.textContent += chunk; }
     });
-    // Save follow-up into session
+    // Persist follow-ups so they survive page refreshes
     if (!q.followUps) q.followUps = [];
     q.followUps.push({ request, response: full, date: new Date().toISOString() });
     await savePrepProgress(appId, { questions: session.questions });

@@ -125,7 +125,7 @@ export async function generateAnswers(fields, signal, format = 'auto') {
   for (const f of fields) {
     const key = `${f.id}|${f.name}`;
 
-    // Declaration checkboxes → always null (user must check manually)
+    // Declaration checkboxes → null (business rule: user must read and check these personally; auto-fill is never permitted)
     if (f.isDeclaration) {
       directFills[key] = null;
       continue;
@@ -171,7 +171,7 @@ export async function generateAnswers(fields, signal, format = 'auto') {
     needsClaude.push(f);
   }
 
-  // ── Enrich with referees from personal details ────────────────────────────
+  // Build a text summary of personal details to pass in the system prompt
   const personalSummary = buildPersonalSummary(personal);
 
   // ── Claude call for remaining fields ─────────────────────────────────────
@@ -234,8 +234,9 @@ export async function generateAnswers(fields, signal, format = 'auto') {
     return { ...f, value, fieldKey: key };
   });
 
-  // Attach recommendation as a non-serialised property (survives in-session use;
-  // dropped by JSON.stringify during session cache — that is intentional).
+  // Recommendation is attached directly to the array object (not an element) so
+  // JSON.stringify silently drops it during session cache — intentional, since the
+  // recommendation is only relevant for the current popup open, not for restoration.
   annotated.recommendation = { format: recommendedFormat, reason: formatReason };
 
   return annotated;

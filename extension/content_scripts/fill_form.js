@@ -12,6 +12,7 @@
 (function () {
   'use strict';
 
+  // Guard flag prevents double-initialisation if the content script is injected twice
   if (window.__jmFormFiller) return;
   window.__jmFormFiller = true;
 
@@ -50,12 +51,14 @@
   // ── Dispatch synthetic events ────────────────────────────────────────────────
 
   /**
-   * Fires input + change events so React, Angular, and Vue detect the change.
+   * Fires input + change events so React, Angular, and Vue detect the programmatic change.
+   * The native value setter hack is required for React-controlled inputs whose synthetic
+   * event system does not fire when el.value is set directly.
    */
   function triggerEvents(el) {
     el.dispatchEvent(new Event('input',  { bubbles: true, cancelable: true }));
     el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-    // React's internal state management
+    // Set via the native prototype setter so React's internal fibre sees the update
     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
     if (nativeInputValueSetter && el instanceof HTMLInputElement) {
       nativeInputValueSetter.call(el, el.value);
@@ -146,7 +149,7 @@
       const { fieldId, fieldName, fieldType, value } = answer;
       const key = fieldId || fieldName;
 
-      // Declaration checkboxes must NEVER be auto-checked
+      // Declaration checkboxes are skipped here as well as in the agent — belt-and-braces safety
       if (answer.isDeclaration) {
         results[key] = 'skipped_declaration';
         continue;

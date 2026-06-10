@@ -101,7 +101,8 @@ export async function generatePrepSession(appId, signal) {
   if (!app) throw new Error('Application not found in tracker.');
   if (!cv)  throw new Error('No active CV set. Please upload and select a CV in Settings.');
 
-  // Stored document text (cover letter / supporting statement used)
+  // Attempt to include the cover letter or statement written for this role so the
+  // coach can tailor follow-up questions to what the candidate already claimed
   let docText = '';
   try {
     const { savedDocs = [] } = await chrome.storage.local.get('savedDocs');
@@ -121,7 +122,8 @@ export async function generatePrepSession(appId, signal) {
     { text: `CANDIDATE CV:\n\n${cv.text}`, cache: true }
   ]);
 
-  // Run main prep session and resources in parallel
+  // Fire both Claude calls in parallel — resources use a separate lightweight call
+  // so a failure there (e.g. hallucinated URLs) doesn't block the main session
   const [prepRaw, resourcesRaw] = await Promise.all([
     callClaude({
       model:     'sonnet',

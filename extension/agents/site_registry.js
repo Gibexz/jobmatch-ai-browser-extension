@@ -178,7 +178,7 @@ export async function registerCustomSiteScript(site) {
     try {
       await chrome.scripting.registerContentScripts([script]);
     } catch (err) {
-      // Already registered (e.g. after service worker restart) — ignore.
+      // Duplicate registration throws on service worker restart — safe to ignore
       if (!err.message?.includes('already registered')) console.warn('[site_registry]', err.message);
     }
   }
@@ -248,7 +248,7 @@ async function getSeenListings() {
 async function markListingsSeen(ids) {
   const seen = await getSeenListings();
   for (const id of ids) seen.add(id);
-  // Cap at 5000 entries to prevent unbounded growth
+  // Cap the seen-listings set to prevent storage bloat; keep the most recent 5000
   const arr = [...seen].slice(-5000);
   await chrome.storage.local.set({ [KEY_SEEN_LISTINGS]: arr });
 }

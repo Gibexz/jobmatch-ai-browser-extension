@@ -64,7 +64,7 @@ const DEFAULT_PERSONAL_DETAILS = {
     disability:      '',
     sexualOrientation: '',
     religion:        '',
-    preferNotToSay:  false // if true, Agent 2 uses "Prefer not to say" for all diversity fields
+    preferNotToSay:  false // when true, form_filler sends "Prefer not to say" for every diversity question
   },
   drivingLicence: {
     status:     '', // "Full UK" | "Provisional" | "International" | "None"
@@ -147,7 +147,7 @@ export async function getPersonalDetails() {
 export async function savePersonalDetails(details) {
   await chrome.storage.local.set({ [KEY_PERSONAL]: details });
 
-  // Sync registration expiry into checklist if set
+  // Keep the 'registration' checklist item in sync so expiry warnings fire automatically
   const regExpiry = details?.professionalRegistration?.expiryDate;
   if (regExpiry) {
     const checklist = await getSponsorshipChecklist();

@@ -80,12 +80,13 @@ export async function runAdvisor(jobText, unfillableGaps = [], signal) {
   const raw    = await callClaude({ model: 'sonnet', system, messages, maxTokens: 2000, signal });
   const result = parseJSON(raw);
 
+  // Merge career and sponsorship prep into one list so the popup renders a single prioritised view
   const all = [
     ...(result.suggestions    || []),
     ...(result.sponsorshipPrep|| []).map(s => ({ ...s, category: 'Sponsorship' }))
   ];
 
-  // Sort: High first, then Medium, then Low
+  // Sort High → Medium → Low so the most actionable items appear first
   const order = { High: 0, Medium: 1, Low: 2 };
   all.sort((a, b) => (order[a.priority] ?? 2) - (order[b.priority] ?? 2));
 

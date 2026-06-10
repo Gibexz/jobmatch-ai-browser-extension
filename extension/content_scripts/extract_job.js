@@ -59,9 +59,9 @@
         const org     = job.hiringOrganization;
         const company = (typeof org === 'string' ? org : (org?.name ?? '')).trim();
 
-        // Salary — two formats in the wild:
-        //   Flat:   baseSalary.{ minValue, maxValue, currency }
-        //   Nested: baseSalary.{ currency, value: { minValue, maxValue } }
+        // baseSalary has two schema.org variants in the wild:
+        //   Flat (DWP/Find a Job):  baseSalary.{ minValue, maxValue, currency }
+        //   Nested QuantitativeValue (LinkedIn, Indeed): baseSalary.{ currency, value: { minValue, maxValue } }
         let salary = '';
         const sal  = job.baseSalary;
         if (sal) {
@@ -91,9 +91,10 @@
     return null;
   }
 
-  // Job board / aggregator platform names — when these appear as
-  // hiringOrganization on aggregator sites they are the SOURCE PLATFORM,
-  // not the actual employer.  We clear them so the user uses manual search.
+  // Aggregator sites (DWP Find a Job, Indeed, etc.) set hiringOrganization to
+  // their own platform name instead of the real employer's name. Clearing it
+  // forces the sponsorship checker to use manual employer search rather than
+  // incorrectly matching "Indeed" or "NHS Jobs" on the Licensed Sponsors register.
   const AGGREGATOR_NAMES = new Set([
     'nhs jobs', 'reed', 'reed.co.uk', 'indeed', 'linkedin',
     'totaljobs', 'cv-library', 'monster', 'jobsite', 'cwjobs',
@@ -397,8 +398,8 @@
       if (m) noMatches.push(m[0]);
     }
 
-    // YES wins if any positive signal is present — a page that explicitly says
-    // sponsorship is available but also has boilerplate refusal text is a YES.
+    // YES always beats NO: some employers include both "sponsorship available" and
+    // "cannot sponsor those who need a work permit" boilerplate on the same page.
     if (yesMatches.length > 0) return { explicit: 'yes', text: yesMatches };
     if (noMatches.length  > 0) return { explicit: 'no',  text: noMatches  };
     return { explicit: null, text: [] };
@@ -445,9 +446,8 @@
 
     const descText = raw.description || '';
 
-    // Sponsorship sections often appear OUTSIDE the main job description container
-    // (e.g. NHS Jobs puts "Certificate of Sponsorship" in a separate page section).
-    // Always scan the full visible page text so we never miss those signals.
+    // Scan the full page text, not just the description container, because NHS Jobs
+    // places the "Certificate of Sponsorship" section outside the main description div.
     const fullPageText = clean(document.body?.innerText ?? '').slice(0, 20000);
     const sponsorText  = [raw.title, raw.company, raw.salary, descText, fullPageText].join(' ');
 

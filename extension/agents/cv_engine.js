@@ -354,6 +354,7 @@ export async function matchCV(jobText, signal) {
   if (!cv) throw new Error('No active CV set. Please upload and select a CV first.');
   if (!jobText?.trim()) throw new Error('Job description text is required.');
 
+  // cache:true on both blocks so repeated calls for the same CV hit the prompt cache (reduces cost)
   const system = buildSystemBlocks([
     { text: MATCH_INSTRUCTIONS, cache: true },
     { text: `CANDIDATE CV:\n\n${cv.text}`, cache: true }
@@ -414,7 +415,7 @@ export async function optimiseCV(jobText, signal, format = 'auto') {
     model:     'sonnet',
     system,
     messages:  [{ role: 'user', content: `JOB DESCRIPTION:\n\n${jobText}\n\nFORMAT: ${format}\n\nReturn the JSON result.` }],
-    maxTokens: 8192,
+    maxTokens: 8192, // raised from 4096 — a full CV rewrite JSON can exceed 4096 tokens causing silent truncation
     signal
   });
 

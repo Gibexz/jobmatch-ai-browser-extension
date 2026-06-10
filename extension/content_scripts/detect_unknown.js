@@ -10,10 +10,11 @@
 (function () {
   'use strict';
 
+  // Guard flag prevents duplicate messages on pages where the script is injected more than once
   if (window.__jmDetect) return;
   window.__jmDetect = true;
 
-  // Tell the service worker which URL was just loaded
+  // Notify the service worker so it can update the badge for this tab
   chrome.runtime.sendMessage({
     type: 'PAGE_VISITED',
     url:  location.href

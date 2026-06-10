@@ -73,6 +73,9 @@ function handleUrlParams() {
 
 // ── ════ API KEY ══════════════════════════════════════════════════════════════
 
+/**
+ * Initialises the API key section: loads the stored key, wires show/hide and save buttons.
+ */
 async function initApiKey() {
   // Always load from local storage first (source of truth), then session fallback
   let key = '';
@@ -112,7 +115,7 @@ async function initApiKey() {
     btn.disabled = true;
     btn.textContent = 'Testing…';
 
-    // Read key directly from local storage (not the input, in case unsaved)
+    // Use the persisted key for the test, not the input value — the user may not have saved yet
     let storedKey = '';
     try { storedKey = (await chrome.storage.local.get('apiKey')).apiKey ?? ''; } catch (_) {}
     if (!storedKey) storedKey = $('api-key-input').value.trim();
@@ -149,8 +152,8 @@ async function initApiKey() {
         const failEl = $('fail-api-test');
         failEl.textContent = `✗ 401 Unauthorized — ${apiMsg || 'invalid API key'}`;
         show('fail-api-test');
-      } else if (res.status === 529 || res.status === 529) {
-        // Overloaded but key is accepted
+      } else if (res.status === 529) {
+        // 529 = Anthropic overloaded; the key was accepted so treat as success
         show('confirm-api-test');
       } else {
         // 400 bad request etc — key was accepted, minor request issue
@@ -669,6 +672,7 @@ async function initBackupRestore() {
       const text   = await file.text();
       const backup = JSON.parse(text);
 
+      // version field is used as the presence check for a valid backup envelope
       if (!backup.version) throw new Error('This does not appear to be a valid JobMatch AI backup file.');
 
       const confirmed = confirm(

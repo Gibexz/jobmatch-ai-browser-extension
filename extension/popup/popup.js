@@ -98,10 +98,12 @@ function newAbort() {
 const SESSION_KEY          = 'jm_sessionCache';
 const AUTO_RESTORE_MINS    = 10;
 
-/** Saves current analysis state to local storage, keyed on the page URL. */
+/**
+ * Persists the current analysis state keyed by the active page URL.
+ * Saves whenever any meaningful result exists so Sponsorship-only sessions
+ * are also captured (not just CV match sessions).
+ */
 async function saveSessionCache() {
-  // Save whenever ANY meaningful result exists — not just when matchResult is set.
-  // This ensures Sponsorship-tab-only sessions are also persisted.
   if (!state.currentTab?.url) return;
   if (!state.matchResult && !state.sponsorshipVerdict && !state.annotatedFields) return;
   const entry = {
@@ -132,9 +134,9 @@ async function checkAndRestoreSession() {
 
   const ageMins = (Date.now() - cache.ts) / 60_000;
   if (ageMins <= AUTO_RESTORE_MINS) {
-    applySessionCache(cache, true);
+    applySessionCache(cache, true); // auto-restore silently if session is fresh
   } else {
-    showRestoreBanner(cache, ageMins);
+    showRestoreBanner(cache, ageMins); // offer opt-in restore for older sessions
   }
 }
 
@@ -358,10 +360,10 @@ async function analyseJob() {
     show('save-prompt');
     saveSessionCache(); // early save — captures score even if advisor is still running
 
-    // 3. Run advisor in background (non-blocking)
+    // Run advisor in the background so the match score appears immediately
     show('advisor-section');
     show('spinner-advisor');
-    // Map gap objects to strings for the advisor prompt
+    // Gap objects from cv_engine carry { requirement, reason }; flatten to strings for the advisor prompt
     const gapStrings = (state.matchResult?.gaps ?? [])
       .map(g => typeof g === 'string' ? g : `${g.requirement}: ${g.reason}`);
     runAdvisor(jobText, gapStrings, signal)
@@ -826,9 +828,9 @@ async function checkSponsorshipHandler() {
   const onProgress = msg => { $('sponsorship-status').textContent = msg; };
 
   try {
-    // Always re-extract for sponsorship — the sponsorship section can appear
-    // outside the main description container and state.jobData may be stale
-    // (e.g. set before the updated content script was loaded).
+    // Always re-extract rather than relying on state.jobData: the sponsorship
+    // section on NHS Jobs lives outside the main description container and may
+    // not have been captured if jobData was set on an earlier popup open.
     let jobData = null;
     try {
       jobData = await extractJobFromTab(state.currentTab.id);

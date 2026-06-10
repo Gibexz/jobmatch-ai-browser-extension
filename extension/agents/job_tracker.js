@@ -57,10 +57,10 @@ export async function saveApplication(data) {
   list.push(app);
   await saveApplications(list);
 
-  // Schedule deadline notification (24 h before deadline)
+  // Alarm fires 24 hours before the deadline so the user has time to act
   if (app.applicationDeadline) {
     const deadlineMs = Date.parse(app.applicationDeadline);
-    const alarmAt    = deadlineMs - 86_400_000; // 24 hours before
+    const alarmAt    = deadlineMs - 86_400_000; // 24 h advance warning
     if (alarmAt > Date.now()) {
       chrome.alarms.create(`deadline-${app.id}`, { when: alarmAt });
     }
@@ -126,7 +126,7 @@ export function computeAnalytics(apps) {
     ? Math.round(scoredApps.reduce((s, a) => s + a.matchScore, 0) / scoredApps.length)
     : 0;
 
-  // Simple plain-English insight
+  // Only generate an insight when there are enough applications to be meaningful
   let insight = '';
   if (total >= 3) {
     if (shortlistRate >= 50) {

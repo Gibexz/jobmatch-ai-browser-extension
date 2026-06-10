@@ -25,7 +25,7 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// Service workers can sleep; recreate the alarm on wake-up if it's missing.
+// MV3 service workers can be terminated at any time; recreate the alarm on wake-up if it was cleared.
 chrome.runtime.onStartup.addListener(async () => {
   const alarm = await chrome.alarms.get(ALERT_ALARM_NAME);
   if (!alarm) {
@@ -58,9 +58,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true; // keep channel open for async response
   }
 
-  // Generic fetch proxy — all gov.uk and assets CDN requests from the popup are
-  // routed here so that gov.uk's Link: preload HTTP headers never reach the
-  // popup context (which would violate the extension's "script-src 'self'" CSP).
+  // PROXY_FETCH: route all gov.uk / assets CDN fetches through the SW so gov.uk's
+  // "Link: preload" response headers never reach the popup's "script-src 'self'"
+  // CSP context, which would throw a CSP violation and block the request.
   if (msg.type === 'PROXY_FETCH') {
     proxyFetch(msg.url, msg.headers || {})
       .then(r  => sendResponse(r))
@@ -72,9 +72,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 /**
- * Generic fetch proxy for gov.uk and assets CDN.
- * The service worker has no extension-page CSP, so Link: preload headers from
- * gov.uk do not cause violations here.  Only allow-listed domains can be proxied.
+ * Fetch a URL on behalf of the popup and return the response body text.
+ * The service worker has no extension-page CSP, so gov.uk's Link: preload
+ * headers do not cause violations here. Only allow-listed domains can be proxied.
+ * @param {string} url
+ * @param {object} [headers]
+ * @returns {Promise<{text: string}>}
  */
 const PROXY_ALLOWED = [
   'https://www.gov.uk/',

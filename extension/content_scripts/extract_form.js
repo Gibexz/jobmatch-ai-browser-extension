@@ -12,7 +12,8 @@
 (function () {
   'use strict';
 
-  if (window.__jmFormExtractor) return; // prevent double-init
+  // Guard flag prevents double-initialisation if the content script is injected twice
+  if (window.__jmFormExtractor) return;
   window.__jmFormExtractor = true;
 
   // ── Label extraction ─────────────────────────────────────────────────────────
@@ -239,7 +240,7 @@
     const currentFieldCount = document.querySelectorAll('input, textarea, select').length;
 
     const urlChanged   = currentUrl !== _lastUrl;
-    const formChanged  = Math.abs(currentFieldCount - _lastFieldCount) > 2;
+    const formChanged  = Math.abs(currentFieldCount - _lastFieldCount) > 2; // >2 threshold avoids noise from minor DOM mutations
 
     if (urlChanged || formChanged) {
       _lastUrl        = currentUrl;
