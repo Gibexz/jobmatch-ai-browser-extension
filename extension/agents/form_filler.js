@@ -43,8 +43,8 @@ export async function clearSessionCorrections() {
 
 const FORM_FILL_INSTRUCTIONS = `\
 You are an expert NHS job application assistant helping a candidate fill in their application form.
-Given the list of form fields and the candidate's CV and personal details, provide the best
-possible answer for each field that requires a text response.
+Given the list of form fields, the candidate's CV, personal details, and (optionally) the specific
+job they are applying for, provide the best possible answer for each field that requires a text response.
 
 RULES:
 1. Only answer fields that require free-text input. For fields already handled by personal details
@@ -52,6 +52,17 @@ RULES:
 2. Never invent qualifications, roles, skills, or achievements not in the CV.
 3. For diversity/equal opportunities fields, use the candidate's stored preferences or leave as "".
 4. For declaration checkboxes, set the answer to null — these must never be auto-filled.
+5. If JOB CONTEXT is provided, tailor every answer to that specific role, its requirements, and
+   its language. If JOB CONTEXT is absent, answer generally from the CV without inventing a role.
+
+EXISTING CONTENT REVIEW:
+- Some fields include an "existingContent" property — text the candidate has already written on the form.
+- For each such field, assess the existing text and return a review in the "reviews" object:
+  - "verdict": "keep" if the existing content is already strong, or "improve" if it can be strengthened.
+  - "reason": one short sentence explaining the verdict.
+- Still provide your best "answer" for these fields: an improved version when the verdict is "improve",
+  or the existing text (lightly polished or unchanged) when the verdict is "keep".
+- Only include a field in "reviews" if it had existingContent.
 
 FORMAT RULE — apply the FORMAT value from the user message:
 - "star": use STAR structure (Situation, Task, Action, Result) for ALL free-text answers, including motivation and experience questions. Label each element inline: "Situation: ... Task: ... Action: ... Result: ..."
@@ -68,8 +79,37 @@ Return ONLY valid JSON — no markdown fences, no extra text:
   "formatReason": "<one sentence>",
   "answers": {
     "<fieldId>|<fieldName>": "<suggested answer or null for declarations>"
+  },
+  "reviews": {
+    "<fieldId>|<fieldName>": { "verdict": "keep" | "improve", "reason": "<one sentence>" }
   }
 }`;
+
+/** Builds the JOB CONTEXT prompt block; falls back to a "none" marker when no job is confirmed. */
+function buildJobBlock(jobContext) {
+  if (!jobContext || !(jobContext.title || jobContext.company)) {
+    return 'JOB CONTEXT: none provided — answer generally from the CV, do not invent a specific role.';
+  }
+  return `JOB CONTEXT — the candidate is applying for this specific role:\n` +
+    `Title: ${jobContext.title || ''}\n` +
+    `Company: ${jobContext.company || ''}\n\n` +
+    `${jobContext.descriptionText || ''}`.trim();
+}
+
+/** Maps a scanned field to the compact payload sent to Claude; flags pre-filled content for review. */
+function toFieldPayload(f) {
+  const entry = {
+    key:         f.fieldKey || `${f.id}|${f.name}`,
+    label:       f.label || f.placeholder || f.name,
+    type:        f.type,
+    options:     f.options?.map(o => o.text) ?? [],
+    required:    f.required,
+    isNHSValues: f.isNHSValues
+  };
+  const existing = (f.currentValue ?? f.value ?? '').trim();
+  if (existing) entry.existingContent = existing;
+  return entry;
+}
 
 // ── Scan ──────────────────────────────────────────────────────────────────────
 
@@ -101,12 +141,15 @@ export async function scanCurrentForm(tabId) {
  * Pulls personal details and CV automatically.
  * Applies session corrections from previous fills.
  *
- * @param {Array}       fields  - from scanCurrentForm().fields
+ * @param {Array}       fields       - from scanCurrentForm().fields
  * @param {AbortSignal} [signal]
- * @returns {Promise<Array<{fieldId,fieldName,fieldType,label,value,isDeclaration,...}>>}
- *   Each entry is the original field object + a `value` property with the suggested answer.
+ * @param {string}      [format]     - 'auto' | 'star' | 'narrative'
+ * @param {object}      [jobContext] - the confirmed job { title, company, descriptionText } or null
+ * @returns {Promise<Array<{fieldId,fieldName,fieldType,label,value,isDeclaration,existingValue,suggestion,review,...}>>}
+ *   Each entry is the original field object + a `value` (default answer), plus `existingValue`,
+ *   `suggestion`, and `review` ({verdict, reason}) for fields that arrived with pre-filled content.
  */
-export async function generateAnswers(fields, signal, format = 'auto') {
+export async function generateAnswers(fields, signal, format = 'auto', jobContext = null) {
   if (!fields?.length) throw new Error('No form fields found on this page.');
 
   const [cv, personal, corrections] = await Promise.all([
@@ -177,19 +220,12 @@ export async function generateAnswers(fields, signal, format = 'auto') {
   // ── Claude call for remaining fields ─────────────────────────────────────
 
   let claudeAnswers = {};
+  let claudeReviews = {};
   let recommendedFormat = format === 'auto' ? 'star' : format;
   let formatReason      = '';
 
   if (needsClaude.length > 0) {
-    const fieldList = needsClaude.map(f => ({
-      key:      `${f.id}|${f.name}`,
-      label:    f.label || f.placeholder || f.name,
-      type:     f.type,
-      options:  f.options?.map(o => o.text) ?? [],
-      required: f.required,
-      isNHSValues: f.isNHSValues,
-      currentValue: f.currentValue || ''
-    }));
+    const fieldList = needsClaude.map(f => toFieldPayload({ ...f, fieldKey: `${f.id}|${f.name}` }));
 
     const system = buildSystemBlocks([
       { text: FORM_FILL_INSTRUCTIONS, cache: true },
@@ -197,7 +233,10 @@ export async function generateAnswers(fields, signal, format = 'auto') {
       { text: `PERSONAL DETAILS:\n${personalSummary}`, cache: true }
     ]);
 
-    const userMsg = `FORM FIELDS TO ANSWER:\n${JSON.stringify(fieldList, null, 2)}\n\nFORMAT: ${format}\n\nReturn the JSON response now.`;
+    // Job context goes in the user message (not a cached system block) since it
+    // changes per job — keeping the CV/instructions blocks cache-eligible.
+    const userMsg = `${buildJobBlock(jobContext)}\n\nFORM FIELDS TO ANSWER:\n` +
+      `${JSON.stringify(fieldList, null, 2)}\n\nFORMAT: ${format}\n\nReturn the JSON response now.`;
 
     const raw = await callClaude({
       model:     'sonnet',
@@ -209,10 +248,11 @@ export async function generateAnswers(fields, signal, format = 'auto') {
 
     try {
       const parsed = parseJSON(raw);
-      // Handle new wrapped shape { recommendedFormat, formatReason, answers }
+      // Handle new wrapped shape { recommendedFormat, formatReason, answers, reviews }
       // and old flat shape { fieldKey: answer } for backwards compatibility
       if (parsed && typeof parsed.answers === 'object' && !Array.isArray(parsed.answers)) {
         claudeAnswers = parsed.answers;
+        claudeReviews = parsed.reviews ?? {};
         recommendedFormat = parsed.recommendedFormat ?? recommendedFormat;
         formatReason      = parsed.formatReason      ?? '';
       } else {
@@ -226,12 +266,24 @@ export async function generateAnswers(fields, signal, format = 'auto') {
   // ── Merge and return annotated fields ────────────────────────────────────
 
   const annotated = fields.map(f => {
-    const key   = `${f.id}|${f.name}`;
-    const value = directFills.hasOwnProperty(key)
-      ? directFills[key]
-      : (claudeAnswers[key] ?? '');
+    const key = `${f.id}|${f.name}`;
 
-    return { ...f, value, fieldKey: key };
+    // Personal-detail / declaration fields are filled directly — no review needed
+    if (directFills.hasOwnProperty(key)) {
+      return { ...f, value: directFills[key], fieldKey: key, existingValue: '', suggestion: null, review: null };
+    }
+
+    const existingValue = (f.currentValue || '').trim();
+    const suggestion    = claudeAnswers[key] ?? '';
+    // A review only applies when the field arrived with pre-filled content
+    const review        = existingValue ? (claudeReviews[key] ?? null) : null;
+    // Default selection = the recommendation: improved text if Claude says "improve",
+    // otherwise the untouched existing text (never silently overwrite valuable content).
+    const value = (existingValue && review)
+      ? (review.verdict === 'improve' ? suggestion : existingValue)
+      : suggestion;
+
+    return { ...f, value, fieldKey: key, existingValue, suggestion, review };
   });
 
   // Recommendation is attached directly to the array object (not an element) so
@@ -240,6 +292,50 @@ export async function generateAnswers(fields, signal, format = 'auto') {
   annotated.recommendation = { format: recommendedFormat, reason: formatReason };
 
   return annotated;
+}
+
+/**
+ * Re-runs analysis for a single field (used by the per-field "Re-analyse" button).
+ * Re-assesses the field's current text against the CV and confirmed job.
+ *
+ * @param {object}      field        - annotated field; its current `.value` is treated as the existing text
+ * @param {object}      [jobContext] - the confirmed job or null
+ * @param {AbortSignal} [signal]
+ * @param {string}      [format]
+ * @returns {Promise<{suggestion:string, review:{verdict,reason}|null}>}
+ */
+export async function reanalyseField(field, jobContext, signal, format = 'auto') {
+  const cv = await getActiveCV();
+  if (!cv) throw new Error('No active CV set.');
+  const personal        = await getPersonalDetails();
+  const personalSummary = buildPersonalSummary(personal);
+
+  const entry = toFieldPayload(field);
+
+  const system = buildSystemBlocks([
+    { text: FORM_FILL_INSTRUCTIONS, cache: true },
+    { text: `CANDIDATE CV:\n\n${cv.text}`, cache: true },
+    { text: `PERSONAL DETAILS:\n${personalSummary}`, cache: true }
+  ]);
+
+  const userMsg = `${buildJobBlock(jobContext)}\n\nFORM FIELDS TO ANSWER:\n` +
+    `${JSON.stringify([entry], null, 2)}\n\nFORMAT: ${format}\n\nReturn the JSON response now.`;
+
+  const raw = await callClaude({
+    model:     'sonnet',
+    system,
+    messages:  [{ role: 'user', content: userMsg }],
+    maxTokens: 1500,
+    signal
+  });
+
+  const parsed  = parseJSON(raw);
+  const answers = (parsed && typeof parsed.answers === 'object') ? parsed.answers : parsed;
+  const reviews = parsed?.reviews ?? {};
+  return {
+    suggestion: answers?.[entry.key] ?? '',
+    review:     reviews[entry.key]   ?? null
+  };
 }
 
 // ── Fill ──────────────────────────────────────────────────────────────────────

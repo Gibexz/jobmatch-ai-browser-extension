@@ -178,7 +178,24 @@
         <button class="btn-ghost btn-sm error-retry hidden" id="retry-scan">Retry</button>
       </div>
 
+      <!-- Job context gate — shown after scan, before answers are generated -->
+      <div class="job-context-gate hidden" id="job-context-gate">
+        <div class="jcg-question" id="jcg-question"></div>
+        <div class="jcg-actions" id="jcg-actions">
+          <button class="btn-primary btn-sm"   id="jcg-confirm">Yes, that's the one</button>
+          <button class="btn-secondary btn-sm" id="jcg-pick">No, pick another</button>
+        </div>
+        <div class="jcg-picker hidden" id="jcg-picker">
+          <select id="jcg-select" aria-label="Select the job you are applying for"></select>
+          <div class="jcg-picker-actions">
+            <button class="btn-primary btn-sm" id="jcg-picker-confirm">Use this job</button>
+            <button class="btn-ghost btn-sm"   id="jcg-cvonly">Fill without a job (CV only)</button>
+          </div>
+        </div>
+      </div>
+
       <div id="fields-wrap" class="hidden">
+        <div class="fill-active-job hidden" id="fill-active-job"></div>
         <div class="fields-count" id="fields-count"></div>
         <div id="fields-list" role="list" aria-label="Detected form fields"></div>
         <div class="action-row mt-8">

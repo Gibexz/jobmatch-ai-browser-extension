@@ -11,7 +11,7 @@ import { getActiveCV, matchCV, optimiseCV, saveOptimisedCV,
          generateStatement, generateCoverLetter, getCVList }
   from '../agents/cv_engine.js';
 
-import { scanCurrentForm, generateAnswers, fillForm as fillFormContent, saveCorrection }
+import { scanCurrentForm, generateAnswers, reanalyseField, fillForm as fillFormContent, saveCorrection }
   from '../agents/form_filler.js';
 
 import { extractJobFromTab, analyseSponsorship, confirmEmployerSelection,
@@ -43,6 +43,8 @@ const state = {
   fillFormat:          'auto',
   formFields:          null,   // from scanCurrentForm
   annotatedFields:     null,   // from generateAnswers
+  fillJobContext:      null,   // confirmed job the form is being filled for
+  _pendingJobs:        [],     // last-10 analysed jobs, staged for the context gate
   sponsorshipVerdict:  null,
   applications:        [],
   sortField:           'applicationDeadline',
@@ -97,6 +99,34 @@ function newAbort() {
 
 const SESSION_KEY          = 'jm_sessionCache';
 const AUTO_RESTORE_MINS    = 10;
+const ANALYSED_JOBS_KEY    = 'jm_analysedJobs';
+const ANALYSED_JOBS_MAX    = 10;
+
+/** Adds an analysed advert to the front of the rolling last-10 history (de-duplicated). */
+async function recordAnalysedJob(jobData) {
+  if (!jobData || !(jobData.title || jobData.company)) return;
+  const entry = {
+    id:              crypto.randomUUID(),
+    title:           jobData.title || '',
+    company:         jobData.company || '',
+    descriptionText: jobData.descriptionText || '',
+    url:             jobData.url || state.currentTab?.url || '',
+    ts:              Date.now()
+  };
+  const r    = await chrome.storage.local.get(ANALYSED_JOBS_KEY).catch(() => ({}));
+  let   list = r[ANALYSED_JOBS_KEY] ?? [];
+  // Drop any prior record of the same advert before re-adding it at the front
+  list = list.filter(j => !(j.title === entry.title && j.company === entry.company && j.url === entry.url));
+  list.unshift(entry);
+  list = list.slice(0, ANALYSED_JOBS_MAX);
+  await chrome.storage.local.set({ [ANALYSED_JOBS_KEY]: list });
+}
+
+/** @returns {Promise<Array>} the rolling last-10 analysed jobs, newest first. */
+async function getAnalysedJobs() {
+  const r = await chrome.storage.local.get(ANALYSED_JOBS_KEY).catch(() => ({}));
+  return r[ANALYSED_JOBS_KEY] ?? [];
+}
 
 /**
  * Persists the current analysis state keyed by the active page URL.
@@ -359,6 +389,11 @@ async function analyseJob() {
     show('results-job-analysis');
     show('save-prompt');
     saveSessionCache(); // early save — captures score even if advisor is still running
+
+    // Record this advert in the rolling history so Form Fill can offer it later.
+    // Advert and application pages are usually on different sites, so we remember
+    // the job rather than trying to re-detect it from the application page.
+    recordAnalysedJob(jobData);
 
     // Run advisor in the background so the match score appears immediately
     show('advisor-section');
@@ -670,6 +705,19 @@ function wireFormFill() {
       state.fillFormat = btn.dataset.format;
     });
   });
+
+  // Job-context gate buttons
+  $('jcg-confirm').addEventListener('click', () => proceedWithAnswers(state._pendingJobs[0] ?? null));
+  $('jcg-pick').addEventListener('click', () => {
+    hide('jcg-actions');
+    show('jcg-picker');
+  });
+  $('jcg-picker-confirm').addEventListener('click', () => {
+    const id  = $('jcg-select').value;
+    const job = state._pendingJobs.find(j => j.id === id) ?? null;
+    proceedWithAnswers(job);
+  });
+  $('jcg-cvonly').addEventListener('click', () => proceedWithAnswers(null));
 }
 
 async function scanFormHandler() {
@@ -677,6 +725,8 @@ async function scanFormHandler() {
 
   clearError('error-form-msg');
   hide('fields-wrap');
+  hide('job-context-gate');
+  hide('fill-format-rec');
   showSpinner('spinner-scan');
   setDisabled('btn-scan-form', true);
   hide('session-warning');
@@ -690,8 +740,86 @@ async function scanFormHandler() {
       return;
     }
 
+    // Stop after scanning — the user must confirm which job before we generate answers
     state.formFields = scanResult.fields;
-    const answers    = await generateAnswers(scanResult.fields, signal, state.fillFormat);
+    await showJobContextGate();
+
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    showError('error-form-msg', 'retry-scan', extractErrorMessage(err), scanFormHandler);
+  } finally {
+    hideSpinner('spinner-scan');
+    setDisabled('btn-scan-form', false);
+  }
+}
+
+/**
+ * After a scan, asks the user to confirm which analysed job the form is for.
+ * Always confirms (never silently matches) — near-identical jobs can only be told
+ * apart by the user. Falls back to a CV-only path when nothing has been analysed.
+ */
+async function showJobContextGate() {
+  const jobs = await getAnalysedJobs();
+  state._pendingJobs = jobs;
+
+  hide('jcg-picker');
+  show('jcg-actions');
+
+  if (!jobs.length) {
+    // Nothing analysed yet — recommend analysing the advert, allow CV-only as a fallback
+    $('jcg-question').textContent =
+      'No analysed job adverts found. For tailored answers, open the job advert and click ' +
+      '“Analyse this job” first, then scan again — or fill from your CV only.';
+    hide('jcg-actions');
+    populateJobSelect([]);
+    show('jcg-picker');
+    show('job-context-gate');
+    return;
+  }
+
+  const top = jobs[0];
+  $('jcg-question').innerHTML =
+    `Applying for: <strong>${escHtml(top.company || 'Unknown')} — ${escHtml(top.title || 'Untitled role')}</strong> ` +
+    `<span class="jcg-age">(analysed ${timeAgo(top.ts)})</span><br>Is this the job you're filling this form for?`;
+  populateJobSelect(jobs);
+  show('job-context-gate');
+}
+
+/** Fills the "pick another" dropdown with the last-10 analysed jobs (timestamped to disambiguate). */
+function populateJobSelect(jobs) {
+  const sel = $('jcg-select');
+  sel.innerHTML = '';
+  if (!jobs.length) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'No analysed jobs available';
+    opt.disabled = true;
+    sel.appendChild(opt);
+    $('jcg-picker-confirm').disabled = true;
+    return;
+  }
+  $('jcg-picker-confirm').disabled = false;
+  for (const j of jobs) {
+    const opt = document.createElement('option');
+    opt.value = j.id;
+    opt.textContent = `${j.company || 'Unknown'} — ${j.title || 'Untitled'} · ${timeAgo(j.ts)}`;
+    sel.appendChild(opt);
+  }
+}
+
+/** Generates answers for the confirmed job (or CV-only when jobContext is null), then renders. */
+async function proceedWithAnswers(jobContext) {
+  hide('job-context-gate');
+  state.fillJobContext = jobContext;
+
+  if (!state.formFields?.length) return;
+
+  showSpinner('spinner-scan');
+  setDisabled('btn-scan-form', true);
+
+  const signal = newAbort();
+  try {
+    const answers = await generateAnswers(state.formFields, signal, state.fillFormat, jobContext);
     state.annotatedFields = answers;
 
     // Show format recommendation badge
@@ -703,16 +831,30 @@ async function scanFormHandler() {
       badge.classList.remove('hidden');
     }
 
+    renderActiveJob(jobContext);
     renderFormFields(answers);
     show('fields-wrap');
     saveSessionCache(); // persist form fields + generated answers
 
   } catch (err) {
     if (err.name === 'AbortError') return;
-    showError('error-form-msg', 'retry-scan', extractErrorMessage(err), scanFormHandler);
+    showError('error-form-msg', 'retry-scan', extractErrorMessage(err), () => proceedWithAnswers(jobContext));
   } finally {
     hideSpinner('spinner-scan');
     setDisabled('btn-scan-form', false);
+  }
+}
+
+/** Shows a small banner above the fields naming the job the answers were tailored for. */
+function renderActiveJob(jobContext) {
+  const el = $('fill-active-job');
+  if (jobContext && (jobContext.title || jobContext.company)) {
+    el.innerHTML = `Answers tailored for: <strong>${escHtml(jobContext.company || 'Unknown')} — ` +
+      `${escHtml(jobContext.title || 'Untitled role')}</strong>`;
+    el.classList.remove('hidden');
+  } else {
+    el.textContent = 'Answers generated from your CV only (no specific job selected).';
+    el.classList.remove('hidden');
   }
 }
 
@@ -738,19 +880,18 @@ function renderFormFields(fields) {
       warn.className = 'declaration-warning';
       warn.textContent = '⚠ Declaration checkbox — please read and check this yourself. It will not be auto-filled.';
       item.append(label, warn);
+    } else if (f.existingValue && f.review) {
+      // Pre-filled field — show existing content, verdict, and a keep/improve choice
+      renderReviewField(item, label, f);
     } else {
       const answer = document.createElement('textarea');
       answer.className = 'field-answer';
       answer.rows = f.type === 'textarea' ? 3 : 1;
       answer.value = f.value ?? '';
-      answer.placeholder = f.isDeclaration ? '(not auto-filled)' : 'Suggested answer…';
+      answer.dataset.fieldKey = f.fieldKey;
+      answer.placeholder = 'Suggested answer…';
       answer.setAttribute('aria-label', `Answer for: ${f.label || f.id}`);
-      answer.addEventListener('change', async () => {
-        // Save correction to session memory
-        const idx = state.annotatedFields?.findIndex(af => af.fieldKey === f.fieldKey);
-        if (idx !== undefined && idx >= 0) state.annotatedFields[idx].value = answer.value;
-        await saveCorrection(f.fieldKey, answer.value);
-      });
+      answer.addEventListener('change', () => syncFieldValue(f.fieldKey, answer.value));
       item.append(label, answer);
     }
 
@@ -758,6 +899,93 @@ function renderFormFields(fields) {
   }
 
   hide('fill-results');
+}
+
+/** Builds the pre-filled-content review UI: existing text, verdict, keep/improve toggle, re-analyse. */
+function renderReviewField(item, label, f) {
+  const isImprove = f.review.verdict === 'improve';
+
+  const existLabel = document.createElement('div');
+  existLabel.className = 'existing-label';
+  existLabel.textContent = 'Already on the form:';
+
+  const existBox = document.createElement('div');
+  existBox.className = 'existing-content';
+  existBox.textContent = f.existingValue;
+
+  const verdict = document.createElement('div');
+  verdict.className = `review-verdict ${isImprove ? 'improve' : 'keep'}`;
+  verdict.textContent = `${isImprove ? '🟡 Could be improved' : '🟢 Looks good'}${f.review.reason ? ' — ' + f.review.reason : ''}`;
+
+  const answer = document.createElement('textarea');
+  answer.className = 'field-answer';
+  answer.rows = 3;
+  answer.value = f.value ?? '';        // default = the recommended option
+  answer.dataset.fieldKey = f.fieldKey;
+  answer.setAttribute('aria-label', `Answer for: ${f.label || f.id}`);
+  answer.addEventListener('change', () => syncFieldValue(f.fieldKey, answer.value));
+
+  // Keep / improve choice — defaults to the recommendation, swaps the textarea text
+  const choice = document.createElement('div');
+  choice.className = 'review-choice';
+  const gname = `choice-${f.fieldKey}`;
+  choice.innerHTML =
+    `<label><input type="radio" name="${gname}" value="keep" ${isImprove ? '' : 'checked'}> Keep existing</label>` +
+    `<label><input type="radio" name="${gname}" value="improve" ${isImprove ? 'checked' : ''}> Use improved</label>`;
+  choice.querySelectorAll('input').forEach(radio => {
+    radio.addEventListener('change', () => {
+      answer.value = radio.value === 'improve' ? (f.suggestion ?? '') : (f.existingValue ?? '');
+      syncFieldValue(f.fieldKey, answer.value);
+    });
+  });
+
+  const reBtn = document.createElement('button');
+  reBtn.className = 'btn-ghost btn-sm reanalyse-btn';
+  reBtn.textContent = '↻ Re-analyse';
+  reBtn.addEventListener('click', () => reanalyseFieldHandler(f, reBtn, answer, verdict));
+
+  item.append(label, existLabel, existBox, verdict, choice, answer, reBtn);
+}
+
+/** Mirrors an edited answer back into state and session correction memory, keyed by fieldKey. */
+function syncFieldValue(fieldKey, value) {
+  const idx = state.annotatedFields?.findIndex(af => af.fieldKey === fieldKey);
+  if (idx !== undefined && idx >= 0) state.annotatedFields[idx].value = value;
+  saveCorrection(fieldKey, value);
+}
+
+/** Re-runs analysis for one field using its current text, then refreshes the verdict and suggestion. */
+async function reanalyseFieldHandler(f, btn, answerEl, verdictEl) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '…';
+  const signal = newAbort();
+  try {
+    // Treat whatever is currently in the textarea as the text to reassess
+    // (currentValue is what toFieldPayload reads first, so it must reflect the edit)
+    const fieldForRe = { ...f, currentValue: answerEl.value, value: answerEl.value, existingValue: answerEl.value };
+    const { suggestion, review } = await reanalyseField(fieldForRe, state.fillJobContext, signal, state.fillFormat);
+
+    const idx = state.annotatedFields?.findIndex(af => af.fieldKey === f.fieldKey);
+    if (idx !== undefined && idx >= 0) {
+      if (suggestion) state.annotatedFields[idx].suggestion = suggestion;
+      if (review)     state.annotatedFields[idx].review     = review;
+    }
+    if (review) {
+      const isImprove = review.verdict === 'improve';
+      verdictEl.className = `review-verdict ${isImprove ? 'improve' : 'keep'}`;
+      verdictEl.textContent = `${isImprove ? '🟡 Could be improved' : '🟢 Looks good'}${review.reason ? ' — ' + review.reason : ''}`;
+    }
+    if (suggestion) {
+      answerEl.value = suggestion;
+      syncFieldValue(f.fieldKey, suggestion);
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') alert(extractErrorMessage(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
 }
 
 async function fillFormHandler() {
@@ -768,9 +996,11 @@ async function fillFormHandler() {
   setDisabled('btn-fill-form', true);
 
   try {
-    // Sync textarea edits back to annotatedFields
-    $$('#fields-list .field-answer').forEach((ta, i) => {
-      if (state.annotatedFields[i]) state.annotatedFields[i].value = ta.value;
+    // Sync textarea edits back to annotatedFields by fieldKey (index-based is unsafe:
+    // declaration fields render no textarea, so positions no longer line up 1:1).
+    $$('#fields-list .field-answer').forEach(ta => {
+      const idx = state.annotatedFields.findIndex(af => af.fieldKey === ta.dataset.fieldKey);
+      if (idx >= 0) state.annotatedFields[idx].value = ta.value;
     });
 
     const results = await fillFormContent(state.currentTab.id, state.annotatedFields);
@@ -1280,6 +1510,17 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/** Human-readable relative time, e.g. "just now", "5 min ago", "2 h ago", "3 d ago". */
+function timeAgo(ts) {
+  if (!ts) return 'earlier';
+  const mins = Math.floor((Date.now() - ts) / 60_000);
+  if (mins < 1)   return 'just now';
+  if (mins < 60)  return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)   return `${hrs} h ago`;
+  return `${Math.floor(hrs / 24)} d ago`;
 }
 
 function truncate(str, max) {
