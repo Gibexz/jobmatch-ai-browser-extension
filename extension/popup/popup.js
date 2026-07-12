@@ -29,7 +29,7 @@ import { saveApplication, getApplications, updateApplication,
 import { runAdvisor }
   from '../agents/advisor.js';
 
-import { buildAlignmentBrief, getAlignmentBrief, deleteAlignmentBrief, chatRefineBrief }
+import { buildAlignmentBrief, getAlignmentBrief, deleteAlignmentBrief, chatRefineBrief, briefToContext }
   from '../agents/application_strategist.js';
 
 import { ClaudeApiError }
@@ -50,6 +50,7 @@ const state = {
   fillJobContext:      null,   // confirmed job the form is being filled for
   _pendingJobs:        [],     // last-10 analysed jobs, staged for the context gate
   currentBrief:        null,   // alignment brief shown in the Strategist tab
+  currentJobId:        null,   // id of the job analysed this session (links to its brief)
   sponsorshipVerdict:  null,
   applications:        [],
   sortField:           'applicationDeadline',
@@ -117,9 +118,13 @@ const AUTO_RESTORE_MINS    = 10;
 const ANALYSED_JOBS_KEY    = 'jm_analysedJobs';
 const ANALYSED_JOBS_MAX    = 10;
 
-/** Adds an analysed advert to the front of the rolling last-10 history (de-duplicated). */
+/**
+ * Adds an analysed advert to the front of the rolling last-10 history (de-duplicated).
+ * Re-analysing the same advert REUSES its existing id, so any alignment brief built for
+ * that job stays linked. Returns the job id.
+ */
 async function recordAnalysedJob(jobData) {
-  if (!jobData || !(jobData.title || jobData.company)) return;
+  if (!jobData || !(jobData.title || jobData.company)) return null;
   const entry = {
     id:              crypto.randomUUID(),
     title:           jobData.title || '',
@@ -130,11 +135,24 @@ async function recordAnalysedJob(jobData) {
   };
   const r    = await chrome.storage.local.get(ANALYSED_JOBS_KEY).catch(() => ({}));
   let   list = r[ANALYSED_JOBS_KEY] ?? [];
-  // Drop any prior record of the same advert before re-adding it at the front
+  // Reuse the id of any prior record of the same advert so linked briefs survive
+  const prior = list.find(j => j.title === entry.title && j.company === entry.company && j.url === entry.url);
+  if (prior) entry.id = prior.id;
   list = list.filter(j => !(j.title === entry.title && j.company === entry.company && j.url === entry.url));
   list.unshift(entry);
   list = list.slice(0, ANALYSED_JOBS_MAX);
   await chrome.storage.local.set({ [ANALYSED_JOBS_KEY]: list });
+  return entry.id;
+}
+
+/** Resolves the id of the current job — from this session, or by matching the analysed history. */
+async function resolveCurrentJobId() {
+  if (state.currentJobId) return state.currentJobId;
+  const jd = state.jobData;
+  if (!jd) return null;
+  const jobs  = await getAnalysedJobs();
+  const match = jobs.find(j => j.title === (jd.title || '') && j.company === (jd.company || ''));
+  return match?.id ?? null;
 }
 
 /** @returns {Promise<Array>} the rolling last-10 analysed jobs, newest first. */
@@ -410,7 +428,7 @@ async function analyseJob() {
     // Record this advert in the rolling history so Form Fill can offer it later.
     // Advert and application pages are usually on different sites, so we remember
     // the job rather than trying to re-detect it from the application page.
-    recordAnalysedJob(jobData);
+    state.currentJobId = await recordAnalysedJob(jobData);
 
     // Run advisor in the background so the match score appears immediately
     show('advisor-section');
@@ -604,10 +622,17 @@ async function generateDocHandler() {
   hide('doc-save-row');
   setDisabled('btn-generate-doc', true);
 
+  // Use this job's alignment brief, if one exists, to tailor the document to the
+  // selection criteria and any confirmed extra experience (optional).
+  const briefJobId   = await resolveCurrentJobId();
+  const brief        = briefJobId ? await getAlignmentBrief(briefJobId) : null;
+  const briefContext = briefToContext(brief);
+
   const signal = newAbort();
   try {
     const opts = {
       signal,
+      briefContext,
       onChunk: chunk => { output.value += chunk; output.scrollTop = output.scrollHeight; }
     };
     if (type === 'cover-letter') {
@@ -803,10 +828,12 @@ async function showJobContextGate() {
     return;
   }
 
-  const top = jobs[0];
+  const top       = jobs[0];
+  const hasBrief  = !!(await getAlignmentBrief(top.id));
+  const briefNote = hasBrief ? ` <span class="jcg-brief">· ✓ alignment brief will be applied</span>` : '';
   $('jcg-question').innerHTML =
     `Applying for: <strong>${escHtml(top.company || 'Unknown')} — ${escHtml(top.title || 'Untitled role')}</strong> ` +
-    `<span class="jcg-age">(analysed ${timeAgo(top.ts)})</span><br>Is this the job you're filling this form for?`;
+    `<span class="jcg-age">(analysed ${timeAgo(top.ts)})</span>${briefNote}<br>Is this the job you're filling this form for?`;
   populateJobSelect(jobs);
   show('job-context-gate');
 }
@@ -843,9 +870,14 @@ async function proceedWithAnswers(jobContext) {
   showSpinner('spinner-scan');
   setDisabled('btn-scan-form', true);
 
+  // Pull in the alignment brief for this job, if one exists (optional — form fill
+  // works identically without it).
+  const brief        = jobContext ? await getAlignmentBrief(jobContext.id) : null;
+  const briefContext = briefToContext(brief);
+
   const signal = newAbort();
   try {
-    const answers = await generateAnswers(state.formFields, signal, state.fillFormat, jobContext);
+    const answers = await generateAnswers(state.formFields, signal, state.fillFormat, jobContext, briefContext);
     state.annotatedFields = answers;
 
     // Show format recommendation badge
@@ -857,7 +889,7 @@ async function proceedWithAnswers(jobContext) {
       badge.classList.remove('hidden');
     }
 
-    renderActiveJob(jobContext);
+    renderActiveJob(jobContext, !!briefContext);
     renderFormFields(answers);
     show('fields-wrap');
     saveSessionCache(); // persist form fields + generated answers
@@ -872,11 +904,12 @@ async function proceedWithAnswers(jobContext) {
 }
 
 /** Shows a small banner above the fields naming the job the answers were tailored for. */
-function renderActiveJob(jobContext) {
+function renderActiveJob(jobContext, usedBrief = false) {
   const el = $('fill-active-job');
   if (jobContext && (jobContext.title || jobContext.company)) {
+    const briefTag = usedBrief ? ` <span class="brief-tag">✓ alignment brief applied</span>` : '';
     el.innerHTML = `Answers tailored for: <strong>${escHtml(jobContext.company || 'Unknown')} — ` +
-      `${escHtml(jobContext.title || 'Untitled role')}</strong>`;
+      `${escHtml(jobContext.title || 'Untitled role')}</strong>${briefTag}`;
     el.classList.remove('hidden');
   } else {
     el.textContent = 'Answers generated from your CV only (no specific job selected).';

@@ -186,6 +186,42 @@ export async function buildAlignmentBrief(jobId, jobFiles, opts = {}) {
   return brief;
 }
 
+// ── Consumption by other agents ─────────────────────────────────────────────
+
+/**
+ * Renders a brief into a compact prompt block for the Form Filler and document
+ * generators. Emphasises the criteria the candidate genuinely meets, flags gaps as
+ * "do not claim", and includes the extra experience added via the refinement chat.
+ * Returns '' for a null/empty brief so callers can always pass it through safely.
+ *
+ * @param {object|null} brief
+ * @returns {string}
+ */
+export function briefToContext(brief) {
+  if (!brief || !Array.isArray(brief.criteria) || !brief.criteria.length) return '';
+
+  const lines = ['ALIGNMENT BRIEF — tailor the response to these selection criteria.'];
+  if (brief.positioning) lines.push(`Positioning: ${brief.positioning}`);
+  if (brief.keywords?.length) lines.push(`Keywords to weave in naturally: ${brief.keywords.join(', ')}`);
+
+  lines.push('', 'Criteria and the candidate\'s evidence:');
+  for (const c of brief.criteria) {
+    const tag = `[${(c.level || '').toUpperCase()}/${c.status}]`;
+    if (c.status === 'gap') {
+      lines.push(`- ${tag} ${c.text} — no supporting evidence; DO NOT claim this.`);
+    } else {
+      lines.push(`- ${tag} ${c.text} — Evidence: ${c.evidence || ''}`);
+    }
+  }
+
+  if (brief.supplementary?.length) {
+    lines.push('', 'Additional real experience the candidate has confirmed (beyond the CV):');
+    for (const s of brief.supplementary) lines.push(`- ${s}`);
+  }
+
+  return lines.join('\n');
+}
+
 // ── Refinement chat ─────────────────────────────────────────────────────────
 
 const CHAT_INSTRUCTIONS = `\

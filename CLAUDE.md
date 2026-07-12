@@ -33,4 +33,8 @@ All application code lives inside the /extension folder.
 - Extracts essential/desirable criteria, maps real CV evidence to each (met/partial/gap),
   and produces a compact cached "alignment brief" per job.
 - Reuses Agent 1 (CV Engine) for parsing/storage; never fills forms; never overwrites the CV.
-- Consumed by Agent 2 (Form Filler) via getAlignmentBrief(jobId) when wired (later phase).
+- A refinement chat lets the candidate add real experience the CV missed; supported criteria
+  are re-mapped live (gap -> partial -> met).
+- Its brief is consumed (via briefToContext) by Form Fill answers AND by the supporting-
+  statement / cover-letter generators, tailoring both to the job's selection criteria.
+  The brief is always optional — every flow works unchanged when none exists.

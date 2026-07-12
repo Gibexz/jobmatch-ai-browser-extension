@@ -603,6 +603,15 @@ ins { background: #e4f5eb; color: var(--nhs-green); text-decoration: none; borde
   padding:       5px 8px;
   margin-bottom: 8px;
 }
+.brief-tag {
+  color:         var(--nhs-green);
+  font-weight:   600;
+  white-space:   nowrap;
+}
+.jcg-brief {
+  color:       var(--nhs-green);
+  font-weight: 600;
+}
 
 /* ── Pre-filled content review ───────────────────────────────────────────────── */
 .existing-label {

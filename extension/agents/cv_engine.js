@@ -461,12 +461,15 @@ export async function generateStatement(jobText, opts = {}) {
   const cv = await getActiveCV();
   if (!cv) throw new Error('No active CV set.');
 
-  const { onChunk, signal } = opts;
+  const { onChunk, signal, briefContext } = opts;
   const system = buildSystemBlocks([
     { text: STATEMENT_INSTRUCTIONS, cache: true },
     { text: `CANDIDATE CV:\n\n${cv.text}`, cache: true }
   ]);
-  const messages = [{ role: 'user', content: `JOB DESCRIPTION:\n\n${jobText}\n\nGenerate the supporting statement now.` }];
+  // Optional alignment brief (from the Application Strategist) tailors the statement to
+  // the job's selection criteria and the candidate's confirmed extra experience.
+  const briefBlock = briefContext ? `${briefContext}\n\n` : '';
+  const messages = [{ role: 'user', content: `JOB DESCRIPTION:\n\n${jobText}\n\n${briefBlock}Generate the supporting statement now.` }];
 
   if (typeof onChunk === 'function') {
     return streamClaude({ model: 'sonnet', system, messages, maxTokens: 1500, signal, onChunk });
@@ -487,12 +490,15 @@ export async function generateCoverLetter(jobText, opts = {}) {
   const cv = await getActiveCV();
   if (!cv) throw new Error('No active CV set.');
 
-  const { onChunk, signal } = opts;
+  const { onChunk, signal, briefContext } = opts;
   const system = buildSystemBlocks([
     { text: COVER_LETTER_INSTRUCTIONS, cache: true },
     { text: `CANDIDATE CV:\n\n${cv.text}`, cache: true }
   ]);
-  const messages = [{ role: 'user', content: `JOB DESCRIPTION:\n\n${jobText}\n\nGenerate the cover letter now.` }];
+  // Optional alignment brief (from the Application Strategist) tailors the letter to the
+  // job's selection criteria and the candidate's confirmed extra experience.
+  const briefBlock = briefContext ? `${briefContext}\n\n` : '';
+  const messages = [{ role: 'user', content: `JOB DESCRIPTION:\n\n${jobText}\n\n${briefBlock}Generate the cover letter now.` }];
 
   if (typeof onChunk === 'function') {
     return streamClaude({ model: 'sonnet', system, messages, maxTokens: 800, signal, onChunk });

@@ -147,11 +147,12 @@ export async function scanCurrentForm(tabId, opts = {}) {
  * @param {AbortSignal} [signal]
  * @param {string}      [format]     - 'auto' | 'star' | 'narrative'
  * @param {object}      [jobContext] - the confirmed job { title, company, descriptionText } or null
+ * @param {string}      [briefContext] - compact alignment-brief text from the Strategist, or ''
  * @returns {Promise<Array<{fieldId,fieldName,fieldType,label,value,isDeclaration,existingValue,suggestion,review,...}>>}
  *   Each entry is the original field object + a `value` (default answer), plus `existingValue`,
  *   `suggestion`, and `review` ({verdict, reason}) for fields that arrived with pre-filled content.
  */
-export async function generateAnswers(fields, signal, format = 'auto', jobContext = null) {
+export async function generateAnswers(fields, signal, format = 'auto', jobContext = null, briefContext = '') {
   if (!fields?.length) throw new Error('No form fields found on this page.');
 
   const [cv, personal, corrections] = await Promise.all([
@@ -235,9 +236,11 @@ export async function generateAnswers(fields, signal, format = 'auto', jobContex
       { text: `PERSONAL DETAILS:\n${personalSummary}`, cache: true }
     ]);
 
-    // Job context goes in the user message (not a cached system block) since it
-    // changes per job — keeping the CV/instructions blocks cache-eligible.
-    const userMsg = `${buildJobBlock(jobContext)}\n\nFORM FIELDS TO ANSWER:\n` +
+    // Job context (and the optional alignment brief) go in the user message rather
+    // than a cached system block, since both change per job — keeping the CV/
+    // instructions blocks cache-eligible.
+    const briefBlock = briefContext ? `${briefContext}\n\n` : '';
+    const userMsg = `${buildJobBlock(jobContext)}\n\n${briefBlock}FORM FIELDS TO ANSWER:\n` +
       `${JSON.stringify(fieldList, null, 2)}\n\nFORMAT: ${format}\n\nReturn the JSON response now.`;
 
     const raw = await callClaude({

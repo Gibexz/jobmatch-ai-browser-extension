@@ -49,8 +49,14 @@ qualification, role, skill, or achievement to satisfy a criterion.
   listAlignmentBriefs()                      -> Array
   deleteAlignmentBrief(jobId)                -> void
 
-## Consumer
-The Form Filler (Agent 2) calls getAlignmentBrief(jobId) when a job is confirmed at the
-context gate. If a brief exists, a compact form (criteria->evidence + keywords +
-positioning) is injected into answer generation. If none exists, form fill behaves exactly
-as before — the brief is always optional. (Form-fill wiring is a later phase.)
+## Consumers
+The orchestrator turns a brief into a compact prompt block via briefToContext(brief) and
+passes it (as a plain string) to:
+- Form Fill (Agent 2) — when a job is confirmed at the context gate, its answers (including
+  "additional information" free-text fields) are tailored to the criteria.
+- Document generation (Agent 1) — the supporting statement and cover letter are tailored to
+  the criteria and any confirmed extra experience.
+
+The compact block emphasises met/partial criteria with evidence, flags gaps as "do not
+claim", and includes the refinement-chat additions. If no brief exists, every flow behaves
+exactly as before — the brief is always optional.
