@@ -1,7 +1,8 @@
 # JobMatch AI — Build Instructions
 
 ## Project
-Chrome Extension (Manifest V3) with 9 specialised subagents.
+Chrome Extension (Manifest V3) with 10 specialised subagents.
+(Agents 1–9 shipped in v1.0; Agent 10 — Application Strategist — added later.)
 All application code lives inside the /extension folder.
 
 ## Rules
@@ -26,3 +27,10 @@ All application code lives inside the /extension folder.
 2. Create all subagent definition files in .claude/agents/
 3. Build agents in this order: 9 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 4. Final assembly and testing
+
+## Agent 10 — Application Strategist (post-v1.0 addition)
+- Ingests uploaded Job Description / Person Specification documents + an optional tailored CV.
+- Extracts essential/desirable criteria, maps real CV evidence to each (met/partial/gap),
+  and produces a compact cached "alignment brief" per job.
+- Reuses Agent 1 (CV Engine) for parsing/storage; never fills forms; never overwrites the CV.
+- Consumed by Agent 2 (Form Filler) via getAlignmentBrief(jobId) when wired (later phase).

@@ -33,6 +33,7 @@
   <nav class="tabs" role="tablist">
     <button class="tab-btn active" data-tab="job-analysis"  role="tab" aria-selected="true"  aria-controls="panel-job-analysis">Job Analysis</button>
     <button class="tab-btn"        data-tab="form-fill"     role="tab" aria-selected="false" aria-controls="panel-form-fill">Form Fill</button>
+    <button class="tab-btn"        data-tab="strategist"    role="tab" aria-selected="false" aria-controls="panel-strategist">Strategist</button>
     <button class="tab-btn"        data-tab="sponsorship"   role="tab" aria-selected="false" aria-controls="panel-sponsorship">Sponsorship</button>
     <button class="tab-btn"        data-tab="tracker"       role="tab" aria-selected="false" aria-controls="panel-tracker">Tracker</button>
   </nav>
@@ -212,7 +213,76 @@
     </section>
 
     <!-- ════════════════════════════════════════════════════════════════════════
-         TAB 3 — Sponsorship
+         TAB 3 — Application Strategist (Agent 10)
+         ════════════════════════════════════════════════════════════════════════ -->
+    <section class="tab-panel" id="panel-strategist" role="tabpanel">
+
+      <div class="strat-intro">
+        Upload the full Job Description &amp; Person Specification to map your CV against every
+        essential and desirable criterion, and see where you're strong or have gaps.
+      </div>
+
+      <label class="strat-field-label" for="strat-job-select">Job (from your analysed adverts)</label>
+      <select id="strat-job-select" class="strat-select" aria-label="Select an analysed job"></select>
+      <div class="strat-hint" id="strat-no-jobs-hint" hidden>
+        No analysed jobs yet — open a job advert and click “Analyse this job” first.
+      </div>
+
+      <label class="strat-field-label" for="strat-job-files">Job documents (JD / person specification)</label>
+      <input type="file" id="strat-job-files" class="strat-file" multiple accept=".pdf,.docx,.txt"
+             aria-label="Upload job documents" />
+
+      <label class="strat-field-label" for="strat-cv-file">Tailored CV for this job (optional)</label>
+      <input type="file" id="strat-cv-file" class="strat-file" accept=".pdf,.docx,.txt"
+             aria-label="Upload a tailored CV" />
+      <input type="text" id="strat-cv-label" class="strat-text-input"
+             placeholder="Label for this CV version (optional)" aria-label="Tailored CV label" />
+      <div class="strat-hint">If provided, it's saved as a new labelled CV version — your original CV is never changed.</div>
+
+      <div class="action-row mt-8">
+        <button class="btn-primary" id="btn-build-brief">Build alignment brief</button>
+        <div class="spinner hidden" id="spinner-strat" aria-label="Building…"></div>
+      </div>
+
+      <div class="error-box hidden" id="error-strat" role="alert">
+        <span id="error-strat-msg"></span>
+        <button class="btn-ghost btn-sm error-retry hidden" id="retry-strat">Retry</button>
+      </div>
+
+      <!-- Brief results -->
+      <div id="strat-results" class="hidden">
+        <div class="strat-brief-hd">
+          <span id="strat-brief-title"></span>
+          <button class="btn-ghost btn-sm" id="btn-delete-brief">Delete</button>
+        </div>
+        <div id="strat-positioning" class="strat-positioning"></div>
+        <div id="strat-keywords" class="strat-keywords"></div>
+        <div id="strat-summary" class="strat-summary"></div>
+        <div id="strat-criteria" class="strat-criteria"></div>
+        <div id="strat-gaps" class="strat-gaps"></div>
+
+        <!-- Refinement chat — add real experience the CV missed -->
+        <div class="strat-chat" id="strat-chat">
+          <div class="strat-chat-hd">Add experience the brief missed</div>
+          <div class="strat-chat-note">
+            Type any real skills or experience you have that were marked partial or a gap.
+            The strategist will re-check the criteria against what you add.
+          </div>
+          <div class="strat-chat-log" id="strat-chat-log" aria-live="polite"></div>
+          <div class="strat-chat-input-row">
+            <textarea id="strat-chat-input" rows="2"
+                      placeholder="e.g. I led a 2-year data migration project managing 5 analysts…"
+                      aria-label="Add experience"></textarea>
+            <button class="btn-primary btn-sm" id="btn-strat-chat-send">Send</button>
+            <div class="spinner hidden" id="spinner-strat-chat"></div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         TAB 4 — Sponsorship
          ════════════════════════════════════════════════════════════════════════ -->
     <section class="tab-panel" id="panel-sponsorship" role="tabpanel">
 

@@ -651,6 +651,191 @@ ins { background: #e4f5eb; color: var(--nhs-green); text-decoration: none; borde
   margin-top: 4px;
 }
 
+/* ── Application Strategist tab (Agent 10) ───────────────────────────────────── */
+.strat-intro {
+  font-size:     12px;
+  color:         var(--muted);
+  margin-bottom: 10px;
+  line-height:   1.45;
+}
+.strat-field-label {
+  display:     block;
+  font-size:   12px;
+  font-weight: 600;
+  color:       var(--nhs-blue);
+  margin:      8px 0 3px;
+}
+.strat-select,
+.strat-text-input {
+  width:         100%;
+  padding:       6px 8px;
+  font-size:     12.5px;
+  border:        1px solid var(--border);
+  border-radius: 4px;
+  background:    var(--white);
+}
+.strat-file {
+  width:     100%;
+  font-size: 12px;
+}
+.strat-hint {
+  font-size:  11px;
+  color:      var(--muted);
+  margin-top: 3px;
+}
+
+.strat-brief-hd {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  font-weight:     700;
+  color:           var(--nhs-blue);
+  font-size:       13.5px;
+  margin:          12px 0 8px;
+  padding-top:     10px;
+  border-top:      2px solid var(--border);
+}
+.strat-positioning {
+  font-size:     12.5px;
+  line-height:   1.5;
+  background:    var(--nhs-pale);
+  border-radius: 4px;
+  padding:       8px 10px;
+  margin-bottom: 8px;
+}
+.strat-keywords {
+  display:       flex;
+  flex-wrap:     wrap;
+  gap:           5px;
+  margin-bottom: 8px;
+}
+.strat-keyword {
+  font-size:     11px;
+  background:    #e8f2ff;
+  color:         var(--nhs-blue-mid);
+  border-radius: 10px;
+  padding:       2px 8px;
+}
+.strat-summary {
+  font-size:     12px;
+  margin-bottom: 10px;
+}
+.strat-summary .met     { color: var(--nhs-green); font-weight: 600; }
+.strat-summary .partial { color: var(--nhs-orange); font-weight: 600; }
+.strat-summary .gap     { color: var(--nhs-red); font-weight: 600; }
+.strat-summary .strat-cv-note { color: var(--muted); margin-left: 6px; }
+
+.strat-criterion {
+  border:        1px solid var(--border);
+  border-left:   3px solid var(--border);
+  border-radius: 4px;
+  padding:       7px 9px;
+  margin-bottom: 6px;
+}
+.strat-criterion.met     { border-left-color: var(--nhs-green); }
+.strat-criterion.partial { border-left-color: var(--nhs-orange); }
+.strat-criterion.gap     { border-left-color: var(--nhs-red); }
+.strat-criterion .crit-hd {
+  display:       flex;
+  align-items:   center;
+  gap:           6px;
+  font-size:     11px;
+  margin-bottom: 3px;
+}
+.crit-level {
+  font-weight:   700;
+  letter-spacing: .3px;
+}
+.crit-level.essential { color: var(--nhs-red); }
+.crit-level.desirable { color: var(--nhs-blue-mid); }
+.crit-cat {
+  color:      var(--muted);
+}
+.crit-text {
+  font-size:     12.5px;
+  font-weight:   600;
+  margin-bottom: 3px;
+}
+.crit-evidence,
+.crit-talking {
+  font-size:   11.5px;
+  line-height: 1.4;
+  margin-top:  2px;
+}
+.crit-talking { color: var(--nhs-blue-mid); }
+.strat-gaps {
+  font-size:     12px;
+  background:    #fde8e6;
+  border-left:   4px solid var(--nhs-red);
+  border-radius: 0 4px 4px 0;
+  padding:       8px 10px;
+  margin-top:    8px;
+}
+.strat-gaps ul { margin: 4px 0 0 16px; }
+
+/* ── Strategist refinement chat ──────────────────────────────────────────────── */
+.strat-chat {
+  margin-top:  12px;
+  padding-top: 10px;
+  border-top:  2px solid var(--border);
+}
+.strat-chat-hd {
+  font-size:   13px;
+  font-weight: 700;
+  color:       var(--nhs-blue);
+  margin-bottom: 3px;
+}
+.strat-chat-note {
+  font-size:     11.5px;
+  color:         var(--muted);
+  line-height:   1.4;
+  margin-bottom: 8px;
+}
+.strat-chat-log {
+  display:        flex;
+  flex-direction: column;
+  gap:            6px;
+  max-height:     220px;
+  overflow-y:     auto;
+  margin-bottom:  8px;
+}
+.chat-msg {
+  font-size:     12.5px;
+  line-height:   1.45;
+  padding:       6px 10px;
+  border-radius: 10px;
+  max-width:     85%;
+  white-space:   pre-wrap;
+  word-wrap:     break-word;
+}
+.chat-msg.user {
+  align-self:  flex-end;
+  background:  var(--nhs-blue);
+  color:       var(--white);
+  border-bottom-right-radius: 3px;
+}
+.chat-msg.assistant {
+  align-self:  flex-start;
+  background:  var(--surface);
+  border:      1px solid var(--border);
+  color:       var(--text);
+  border-bottom-left-radius: 3px;
+}
+.strat-chat-input-row {
+  display:     flex;
+  align-items: flex-start;
+  gap:         6px;
+}
+#strat-chat-input {
+  flex:          1;
+  padding:       6px 8px;
+  font-size:     12.5px;
+  border:        1px solid var(--border);
+  border-radius: 4px;
+  resize:        vertical;
+  font-family:   inherit;
+}
+
 /* ── Manual employer override search ────────────────────────────────────────── */
 .employer-override-wrap {
   margin-bottom:  8px;

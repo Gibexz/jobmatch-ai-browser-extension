@@ -29,6 +29,9 @@ import { saveApplication, getApplications, updateApplication,
 import { runAdvisor }
   from '../agents/advisor.js';
 
+import { buildAlignmentBrief, getAlignmentBrief, deleteAlignmentBrief, chatRefineBrief }
+  from '../agents/application_strategist.js';
+
 import { ClaudeApiError }
   from '../utils/claude_api.js';
 
@@ -46,6 +49,7 @@ const state = {
   annotatedFields:     null,   // from generateAnswers
   fillJobContext:      null,   // confirmed job the form is being filled for
   _pendingJobs:        [],     // last-10 analysed jobs, staged for the context gate
+  currentBrief:        null,   // alignment brief shown in the Strategist tab
   sponsorshipVerdict:  null,
   applications:        [],
   sortField:           'applicationDeadline',
@@ -260,7 +264,8 @@ function switchTab(tabId) {
   $$('.tab-panel').forEach(p => {
     p.classList.toggle('active', p.id === `panel-${tabId}`);
   });
-  if (tabId === 'tracker') renderTrackerTab();
+  if (tabId === 'tracker')    renderTrackerTab();
+  if (tabId === 'strategist') renderStrategistTab();
 }
 
 // ── Popup initialisation ──────────────────────────────────────────────────────
@@ -309,6 +314,7 @@ async function init() {
   // Wire all buttons
   wireJobAnalysis();
   wireFormFill();
+  wireStrategist();
   wireSponsorship();
   wireTracker();
   wireCVBar();
@@ -1046,6 +1052,259 @@ function renderFillResults(results) {
     `<span class="filled">✓ ${filled} filled</span>` +
     (skipped ? ` &nbsp; <span class="skipped">⚠ ${skipped} declaration${skipped > 1 ? 's' : ''} skipped (manual)</span>` : '') +
     (missing ? ` &nbsp; <span class="not-found">✗ ${missing} not found</span>` : '');
+}
+
+// ── ════════════════════════════════════════════════════════════════════════════
+//    STRATEGIST TAB (Agent 10)
+// ═════════════════════════════════════════════════════════════════════════════
+
+function wireStrategist() {
+  $('btn-build-brief').addEventListener('click', buildBriefHandler);
+  $('btn-delete-brief').addEventListener('click', deleteBriefHandler);
+  // Changing the selected job loads that job's existing brief (or clears the view)
+  $('strat-job-select').addEventListener('change', loadBriefForSelectedJob);
+  // Refinement chat
+  $('btn-strat-chat-send').addEventListener('click', stratChatSendHandler);
+  $('strat-chat-input').addEventListener('keydown', e => {
+    // Enter sends; Shift+Enter inserts a newline
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stratChatSendHandler(); }
+  });
+  // Persist the draft as the user types so it survives tab switches / popup close
+  $('strat-chat-input').addEventListener('input', e => {
+    queueSaveStratDraft(state.currentBrief?.jobId, e.target.value);
+  });
+}
+
+// Draft persistence for the Strategist chat box (per job, in session storage so it
+// survives popup close but not a browser restart).
+const STRAT_DRAFT_KEY = 'jm_stratChatDrafts';
+let _stratDraftTimer  = null;
+
+async function getStratDraft(jobId) {
+  if (!jobId) return '';
+  try {
+    const r = await chrome.storage.session.get(STRAT_DRAFT_KEY);
+    return (r[STRAT_DRAFT_KEY] ?? {})[jobId] ?? '';
+  } catch (_) { return ''; }
+}
+
+function queueSaveStratDraft(jobId, text) {
+  if (!jobId) return;
+  clearTimeout(_stratDraftTimer);
+  _stratDraftTimer = setTimeout(async () => {
+    try {
+      const r   = await chrome.storage.session.get(STRAT_DRAFT_KEY);
+      const map = r[STRAT_DRAFT_KEY] ?? {};
+      if (text) map[jobId] = text; else delete map[jobId];
+      await chrome.storage.session.set({ [STRAT_DRAFT_KEY]: map });
+    } catch (_) {}
+  }, 250);
+}
+
+async function clearStratDraft(jobId) {
+  if (!jobId) return;
+  try {
+    const r   = await chrome.storage.session.get(STRAT_DRAFT_KEY);
+    const map = r[STRAT_DRAFT_KEY] ?? {};
+    delete map[jobId];
+    await chrome.storage.session.set({ [STRAT_DRAFT_KEY]: map });
+  } catch (_) {}
+}
+
+/** Populates the job dropdown from the last-10 analysed jobs and shows the selected job's brief. */
+async function renderStrategistTab() {
+  const jobs = await getAnalysedJobs();
+  const sel  = $('strat-job-select');
+  const prev = sel.value;
+
+  sel.innerHTML = '';
+  if (!jobs.length) {
+    $('strat-no-jobs-hint').hidden = false;
+    setDisabled('btn-build-brief', true);
+    hide('strat-results');
+    return;
+  }
+  $('strat-no-jobs-hint').hidden = true;
+  setDisabled('btn-build-brief', false);
+
+  for (const j of jobs) {
+    const opt = document.createElement('option');
+    opt.value = j.id;
+    opt.textContent = `${j.company || 'Unknown'} — ${j.title || 'Untitled'} · ${timeAgo(j.ts)}`;
+    sel.appendChild(opt);
+  }
+  // Preserve the previous selection if it still exists
+  if (prev && jobs.some(j => j.id === prev)) sel.value = prev;
+
+  await loadBriefForSelectedJob();
+}
+
+/** Shows the stored brief for the currently selected job, or clears the results area. */
+async function loadBriefForSelectedJob() {
+  const jobId = $('strat-job-select').value;
+  const brief = jobId ? await getAlignmentBrief(jobId) : null;
+  state.currentBrief = brief;
+  if (brief) {
+    renderBrief(brief);
+    $('strat-chat-input').value = await getStratDraft(jobId); // restore any unsent draft
+  } else {
+    hide('strat-results');
+  }
+}
+
+async function buildBriefHandler() {
+  const jobId = $('strat-job-select').value;
+  if (!jobId) { showError('error-strat-msg', null, 'Select a job first.', null); return; }
+
+  const jobFiles = $('strat-job-files').files;
+  if (!jobFiles?.length) {
+    showError('error-strat-msg', null, 'Upload at least one job document (JD or person specification).', null);
+    return;
+  }
+
+  const job     = state._pendingJobs.find(j => j.id === jobId)
+               ?? (await getAnalysedJobs()).find(j => j.id === jobId);
+  const cvFile  = $('strat-cv-file').files?.[0] || null;
+  const cvLabel = $('strat-cv-label').value.trim();
+
+  clearError('error-strat-msg');
+  hide('strat-results');
+  showSpinner('spinner-strat');
+  setDisabled('btn-build-brief', true);
+
+  const signal = newAbort();
+  try {
+    const brief = await buildAlignmentBrief(jobId, jobFiles, {
+      cvFile, cvLabel,
+      jobTitle: job?.title || '',
+      company:  job?.company || '',
+      signal
+    });
+    state.currentBrief = brief;
+    renderBrief(brief);
+    await refreshCVBar(); // a tailored CV may have been saved as a new active-eligible version
+  } catch (err) {
+    if (err.name !== 'AbortError')
+      showError('error-strat-msg', 'retry-strat', extractErrorMessage(err), buildBriefHandler);
+  } finally {
+    hideSpinner('spinner-strat');
+    setDisabled('btn-build-brief', false);
+  }
+}
+
+async function deleteBriefHandler() {
+  if (!state.currentBrief) return;
+  if (!confirm('Delete this alignment brief?')) return;
+  await deleteAlignmentBrief(state.currentBrief.jobId);
+  state.currentBrief = null;
+  hide('strat-results');
+}
+
+function renderBrief(brief) {
+  $('strat-brief-title').textContent =
+    `${brief.company || 'Unknown'} — ${brief.jobTitle || 'Untitled role'}`;
+
+  // Positioning
+  const posEl = $('strat-positioning');
+  posEl.textContent = brief.positioning || '';
+  posEl.classList.toggle('hidden', !brief.positioning);
+
+  // Keywords
+  const kwEl = $('strat-keywords');
+  kwEl.innerHTML = '';
+  if (brief.keywords?.length) {
+    for (const k of brief.keywords) {
+      const chip = document.createElement('span');
+      chip.className = 'strat-keyword';
+      chip.textContent = k;
+      kwEl.appendChild(chip);
+    }
+  }
+
+  // Summary counts
+  const met     = brief.criteria.filter(c => c.status === 'met').length;
+  const partial = brief.criteria.filter(c => c.status === 'partial').length;
+  const gap     = brief.criteria.filter(c => c.status === 'gap').length;
+  $('strat-summary').innerHTML =
+    `<span class="met">${met} met</span> · ` +
+    `<span class="partial">${partial} partial</span> · ` +
+    `<span class="gap">${gap} gap${gap !== 1 ? 's' : ''}</span> ` +
+    `<span class="strat-cv-note">CV: ${escHtml(brief.cvLabel || '—')}</span>`;
+
+  // Criteria list
+  const critEl = $('strat-criteria');
+  critEl.innerHTML = '';
+  for (const c of brief.criteria) {
+    const row = document.createElement('div');
+    row.className = `strat-criterion ${c.status}`;
+    const icon = c.status === 'met' ? '🟢' : c.status === 'partial' ? '🟡' : '🔴';
+    row.innerHTML =
+      `<div class="crit-hd">${icon} <span class="crit-level ${c.level}">${escHtml((c.level || '').toUpperCase())}</span> ` +
+      `<span class="crit-cat">${escHtml(c.category || '')}</span></div>` +
+      `<div class="crit-text">${escHtml(c.text || '')}</div>` +
+      (c.evidence ? `<div class="crit-evidence"><strong>Your evidence:</strong> ${escHtml(c.evidence)}</div>` : '') +
+      (c.talkingPoint ? `<div class="crit-talking"><strong>Suggested angle:</strong> ${escHtml(c.talkingPoint)}</div>` : '');
+    critEl.appendChild(row);
+  }
+
+  // Genuine gaps callout — derived from criteria still marked "gap" so it updates
+  // live as the refinement chat re-maps them.
+  const gapsEl   = $('strat-gaps');
+  const gapItems = brief.criteria.filter(c => c.status === 'gap').map(c => c.text);
+  gapsEl.innerHTML = '';
+  if (gapItems.length) {
+    gapsEl.innerHTML =
+      `<strong>Genuine gaps (not covered yet):</strong>` +
+      `<ul>${gapItems.map(g => `<li>${escHtml(g)}</li>`).join('')}</ul>`;
+    gapsEl.classList.remove('hidden');
+  } else {
+    gapsEl.classList.add('hidden');
+  }
+
+  renderChat(brief);
+  show('strat-results');
+}
+
+/** Renders the refinement chat history for a brief. */
+function renderChat(brief) {
+  const log = $('strat-chat-log');
+  log.innerHTML = '';
+  for (const m of brief.conversation ?? []) {
+    const bubble = document.createElement('div');
+    bubble.className = `chat-msg ${m.role}`;
+    bubble.textContent = m.text;
+    log.appendChild(bubble);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+async function stratChatSendHandler() {
+  if (!state.currentBrief) return;
+  const input = $('strat-chat-input');
+  const text  = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  showSpinner('spinner-strat-chat');
+  setDisabled('btn-strat-chat-send', true);
+
+  const jobId = state.currentBrief.jobId;
+  const signal = newAbort();
+  try {
+    const { brief } = await chatRefineBrief(jobId, text, signal);
+    state.currentBrief = brief;
+    await clearStratDraft(jobId); // message sent — drop the saved draft
+    renderBrief(brief); // re-renders criteria (re-mapped) + chat log together
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      input.value = text; // restore the message so it isn't lost
+      queueSaveStratDraft(jobId, text); // and keep it saved
+      alert(extractErrorMessage(err));
+    }
+  } finally {
+    hideSpinner('spinner-strat-chat');
+    setDisabled('btn-strat-chat-send', false);
+  }
 }
 
 // ── ════════════════════════════════════════════════════════════════════════════

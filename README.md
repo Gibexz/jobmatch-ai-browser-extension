@@ -14,12 +14,13 @@ Built entirely with [Claude Code](https://claude.ai/code) using an agentic archi
 |---|---|
 | **Job Analysis** | Extracts job details from the current page, scores your CV against the job description (0–100), shows full matches, partial matches, and gaps, then optimises your CV without fabricating data |
 | **Form Fill** | Scans the current application form, generates answers from your CV using STAR or narrative format, lets you review and edit before injecting into the page |
+| **Strategist** | Ingests the full Job Description / Person Specification (+ an optional tailored CV) and maps your real CV evidence to every essential and desirable criterion (met/partial/gap), with keywords and positioning |
 | **Sponsorship** | Checks whether the employer is on the UK Register of Licensed Sponsors — via page text, a local register cache, and an agentic Claude search of gov.uk as a fallback |
 | **Tracker** | Records all applications with stage, score, deadline, and sponsorship verdict. Analytics dashboard, deadline notifications, and Excel export |
 
 ---
 
-## Architecture — 9 specialised agents
+## Architecture — 10 specialised agents
 
 Each agent owns exactly one domain. No agent calls another agent's internals.
 
@@ -41,9 +42,13 @@ popup.js (UI Orchestrator — routing only, no business logic)
 │     Post-analysis suggestions, sponsorship prep advice, goal tracking
 ├── Agent 8 · Interview Prep     interview_prep.js
 │     STAR Q&A generation, weak-point identification, study resources
+├── Agent 10 · Application Strategist  application_strategist.js
+│     Job-document ingestion, CV-to-criteria alignment brief (met/partial/gap)
 └── Service Worker               background/service_worker.js
       PROXY_FETCH (CSP-safe gov.uk fetching), alarm handling, message routing
 ```
+
+*(Agent 9 is the UI Orchestrator — `popup.js` — shown at the top of the tree.)*
 
 ---
 
