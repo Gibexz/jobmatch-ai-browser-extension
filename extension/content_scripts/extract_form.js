@@ -220,10 +220,64 @@
     };
   }
 
+  // ── TRAC section expansion ───────────────────────────────────────────────────
+
+  /**
+   * TRAC application forms live on trac.jobs / apps.trac.jobs and render each
+   * section collapsed — the input fields only enter the DOM once the per-section
+   * "Edit" control is activated. Gate all of this behind a TRAC host check so no
+   * other site is ever touched.
+   */
+  function isTracHost() {
+    return /(^|\.)trac\.jobs$/i.test(location.hostname);
+  }
+
+  /**
+   * Clicks TRAC's per-section "Edit" controls to reveal their fields, then waits
+   * briefly for the newly rendered inputs to settle. Resolves with the number of
+   * controls clicked. No-op (resolves 0) on any non-TRAC host.
+   *
+   * Only toggle-style controls are clicked (buttons / role=button / in-page
+   * anchors); anything that would navigate away or submit is skipped, and no
+   * checkbox is ever touched — declaration checkboxes must stay user-controlled.
+   */
+  function expandTracSections() {
+    if (!isTracHost()) return Promise.resolve(0);
+
+    let clicked = 0;
+    document.querySelectorAll('button, [role="button"], a').forEach(el => {
+      const text = (el.innerText || el.textContent || '').trim();
+      const aria = (el.getAttribute('aria-label') || '').trim();
+      // Match a bare "Edit" section control (e.g. "Edit", "Edit section").
+      if (!/^edit(\s|$)/i.test(text) && !/^edit(\s|$)/i.test(aria)) return;
+
+      // Skip anchors that navigate elsewhere — only allow in-page toggles.
+      if (el.tagName === 'A') {
+        const href = el.getAttribute('href') || '';
+        if (href && !/^#/.test(href) && !/^javascript:/i.test(href)) return;
+      }
+
+      // Skip hidden / off-screen controls.
+      const style = getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || el.offsetParent === null) return;
+
+      try { el.click(); clicked++; } catch (_) { /* ignore individual click failures */ }
+    });
+
+    // Give TRAC a moment to render the fields revealed by the clicks above.
+    return new Promise(resolve => setTimeout(() => resolve(clicked), 600));
+  }
+
   // ── Message listener ─────────────────────────────────────────────────────────
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === 'SCAN_FORM') {
+      // TRAC form mode: expand collapsed sections first, then scan. Guarded by a
+      // TRAC host check so the toggle can never affect any other site.
+      if (msg.tracMode && isTracHost()) {
+        expandTracSections().then(() => sendResponse(scanFormFields()));
+        return true; // keep the message channel open for the async response
+      }
       sendResponse(scanFormFields());
     }
     // Must return false for synchronous response

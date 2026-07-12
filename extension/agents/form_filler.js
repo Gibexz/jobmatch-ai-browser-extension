@@ -78,10 +78,12 @@ Return ONLY valid JSON — no markdown fences, no extra text:
  * Returns { sessionExpired, fields, url, title } or throws.
  *
  * @param {number} tabId
+ * @param {{tracMode?: boolean}} [opts] - tracMode expands TRAC's collapsed
+ *   sections before scanning (only honoured by the content script on TRAC domains).
  */
-export async function scanCurrentForm(tabId) {
+export async function scanCurrentForm(tabId, opts = {}) {
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, { type: 'SCAN_FORM' }, response => {
+    chrome.tabs.sendMessage(tabId, { type: 'SCAN_FORM', tracMode: !!opts.tracMode }, response => {
       if (chrome.runtime.lastError) {
         reject(new Error(
           'Could not connect to the page. Make sure you are on a supported job site ' +

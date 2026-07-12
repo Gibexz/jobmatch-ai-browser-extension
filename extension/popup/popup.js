@@ -41,6 +41,7 @@ const state = {
   docType:             'cover-letter',
   optimiseFormat:      'auto',
   fillFormat:          'auto',
+  tracMode:            false,  // TRAC section-expanding scan (auto-ticked on trac.jobs)
   formFields:          null,   // from scanCurrentForm
   annotatedFields:     null,   // from generateAnswers
   sponsorshipVerdict:  null,
@@ -63,6 +64,16 @@ function showSpinner(id) { show(id); }
 function hideSpinner(id) { hide(id); }
 
 function setDisabled(id, v) { const el = $(id); if (el) el.disabled = v; }
+
+// True for any TRAC domain — both the advert site (www.trac.jobs) and the
+// application site (apps.trac.jobs). Used to default the "TRAC form mode" toggle.
+function isTracUrl(url) {
+  try {
+    return /(^|\.)trac\.jobs$/i.test(new URL(url).hostname);
+  } catch (_) {
+    return false;
+  }
+}
 
 // ── Error handling ────────────────────────────────────────────────────────────
 
@@ -670,6 +681,15 @@ function wireFormFill() {
       state.fillFormat = btn.dataset.format;
     });
   });
+
+  // TRAC form mode: default it ON when the active tab is a TRAC domain, but
+  // leave the user free to override — this only sets the initial checkbox state.
+  const tracToggle = $('trac-mode');
+  if (tracToggle) {
+    state.tracMode  = isTracUrl(state.currentTab?.url);
+    tracToggle.checked = state.tracMode;
+    tracToggle.addEventListener('change', () => { state.tracMode = tracToggle.checked; });
+  }
 }
 
 async function scanFormHandler() {
@@ -683,7 +703,7 @@ async function scanFormHandler() {
 
   const signal = newAbort();
   try {
-    const scanResult = await scanCurrentForm(state.currentTab.id);
+    const scanResult = await scanCurrentForm(state.currentTab.id, { tracMode: state.tracMode });
 
     if (scanResult.sessionExpired) {
       show('session-warning');

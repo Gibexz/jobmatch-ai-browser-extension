@@ -535,6 +535,22 @@ ins { background: #e4f5eb; color: var(--nhs-green); text-decoration: none; borde
   padding:       4px 8px;
   margin-bottom: 8px;
 }
+.trac-toggle {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           6px;
+  font-size:     12px;
+  color:         var(--text);
+  cursor:        pointer;
+  margin-bottom: 8px;
+  user-select:   none;
+}
+.trac-toggle input {
+  width:         14px;
+  height:        14px;
+  accent-color:  var(--nhs-blue-mid);
+  cursor:        pointer;
+}
 
 /* ── Manual employer override search ────────────────────────────────────────── */
 .employer-override-wrap {
