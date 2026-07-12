@@ -32,6 +32,7 @@ export const BUILT_IN_SITES = [
   { id: 'nhs-jobs-nw', name: 'NHS Jobs',       pattern: 'https://jobs.nhs.uk/*',               type: 'both',    searchUrl: 'https://jobs.nhs.uk/candidate/search/results/?keyword={keywords}&location={location}' },
   { id: 'nhsjobs',     name: 'NHS Jobs (alt)',   pattern: 'https://www.nhsjobs.com/*',            type: 'both',    searchUrl: '' },
   { id: 'trac',        name: 'TRAC Jobs',        pattern: 'https://www.trac.jobs/*',              type: 'both',    searchUrl: 'https://www.trac.jobs/jobs/search?q={keywords}' },
+  { id: 'trac-apps',   name: 'TRAC Jobs',        pattern: 'https://apps.trac.jobs/*',             type: 'form',    searchUrl: '' },
   { id: 'indeed',      name: 'Indeed UK',        pattern: 'https://www.indeed.co.uk/*',           type: 'both',    searchUrl: 'https://www.indeed.co.uk/jobs?q={keywords}&l={location}' },
   { id: 'reed',        name: 'Reed',             pattern: 'https://www.reed.co.uk/*',             type: 'both',    searchUrl: 'https://www.reed.co.uk/jobs/{keywords}-jobs?locationName={location}' },
   { id: 'linkedin',    name: 'LinkedIn Jobs',    pattern: 'https://www.linkedin.com/jobs/*',      type: 'both',    searchUrl: 'https://www.linkedin.com/jobs/search/?keywords={keywords}&location={location}' },

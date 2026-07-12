@@ -436,7 +436,7 @@
     let raw;
     if (host === 'jobs.nhs.uk' || host === 'nhsjobs.com')   raw = extractNHSJobs();
     else if (host === 'findajob.dwp.gov.uk')                 raw = extractDWP(ld);
-    else if (host === 'trac.jobs')                           raw = extractTRAC();
+    else if (host === 'trac.jobs' || host === 'apps.trac.jobs') raw = extractTRAC();
     else if (host === 'indeed.co.uk')                        raw = extractIndeed(ld);
     else if (host === 'reed.co.uk')                          raw = extractReed();
     else if (host === 'linkedin.com')                        raw = extractLinkedIn(ld);
