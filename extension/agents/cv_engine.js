@@ -363,8 +363,11 @@ export async function matchCV(jobText, signal) {
   const text = await callClaude({
     model:     'sonnet',
     system,
+    // 8192 — a detailed job (many requirements × evidence strings) can push the
+    // fullMatches/partialMatches/gaps JSON past a smaller cap, truncating it mid-object
+    // and breaking JSON.parse. Matches the optimiseCV ceiling for the same reason.
     messages:  [{ role: 'user', content: `JOB DESCRIPTION:\n\n${jobText}\n\nReturn the JSON analysis.` }],
-    maxTokens: 2048,
+    maxTokens: 8192,
     signal
   });
 

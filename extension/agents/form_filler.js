@@ -243,8 +243,11 @@ export async function generateAnswers(fields, signal, format = 'auto', jobContex
     const raw = await callClaude({
       model:     'sonnet',
       system,
+      // 8192 — a long form (many fields × STAR answers + reviews) can push the JSON
+      // past a smaller cap and truncate it mid-object, breaking parseJSON. Same fix
+      // as matchCV/optimiseCV. Cost is billed on actual output, not the ceiling.
       messages:  [{ role: 'user', content: userMsg }],
-      maxTokens: 3000,
+      maxTokens: 8192,
       signal
     });
 
