@@ -239,6 +239,12 @@
              placeholder="Label for this CV version (optional)" aria-label="Tailored CV label" />
       <div class="strat-hint">If provided, it's saved as a new labelled CV version — your original CV is never changed.</div>
 
+      <label class="strat-check" for="strat-include-additional"
+             title="Uses the free-text supplement saved in Settings → CV Management → Additional details.">
+        <input type="checkbox" id="strat-include-additional" checked>
+        Include my saved additional details (Settings → CV)
+      </label>
+
       <div class="action-row mt-8">
         <button class="btn-primary" id="btn-build-brief">Build alignment brief</button>
         <div class="spinner hidden" id="spinner-strat" aria-label="Building…"></div>

@@ -14,8 +14,15 @@
  *   deleteAlignmentBrief(jobId)                → void
  */
 
-import { callClaude, buildSystemBlocks, parseJSON } from '../utils/claude_api.js';
-import { parseCV, storeCV, getActiveCV }           from './cv_engine.js';
+import { callClaude, buildSystemBlocks, parseJSON }               from '../utils/claude_api.js';
+import { parseCV, storeCV, getActiveCV, getAdditionalDetails }    from './cv_engine.js';
+
+/** Appends the optional additional-details supplement to a CV text block for the prompt. */
+function withAdditional(cvText, additional) {
+  return additional
+    ? `${cvText}\n\nADDITIONAL DETAILS (provided by the candidate — treat as true):\n${additional}`
+    : cvText;
+}
 
 const KEY_BRIEFS    = 'jm_alignmentBriefs';
 // Cap the combined document text so a large JD pack can't blow the token budget.
@@ -139,13 +146,16 @@ export async function buildAlignmentBrief(jobId, jobFiles, opts = {}) {
     cvLabel = active.label;
   }
 
+  // Optional additional details (Settings → CV) folded into the CV context when opted in
+  const additional = opts.includeAdditionalDetails ? (await getAdditionalDetails()).trim() : '';
+
   // Assemble the (bounded) documents block for the prompt
   let docsBlock = docs.map(d => `=== DOCUMENT: ${d.name} ===\n${d.text}`).join('\n\n');
   if (docsBlock.length > MAX_DOC_CHARS) docsBlock = docsBlock.slice(0, MAX_DOC_CHARS);
 
   const system = buildSystemBlocks([
     { text: STRATEGIST_INSTRUCTIONS, cache: true },
-    { text: `CANDIDATE CV:\n\n${cvText}`, cache: true }
+    { text: `CANDIDATE CV:\n\n${withAdditional(cvText, additional)}`, cache: true }
   ]);
 
   const raw = await callClaude({
@@ -166,6 +176,7 @@ export async function buildAlignmentBrief(jobId, jobFiles, opts = {}) {
     createdAt:   new Date().toISOString(),
     cvLabel,
     cvText,                                    // kept for the refinement chat; not shown in the UI
+    additionalDetails: additional,             // included supplement, so the chat sees it too
     sourceDocs:  docs.map(d => ({ name: d.name, type: d.type, chars: d.chars })), // metadata only — no binaries stored
     // Each criterion gets a stable id so the refinement chat can target it precisely
     criteria:    (Array.isArray(parsed.criteria) ? parsed.criteria : [])
@@ -214,9 +225,13 @@ export function briefToContext(brief) {
     }
   }
 
-  if (brief.supplementary?.length) {
+  const extras = [
+    ...(brief.additionalDetails ? [brief.additionalDetails] : []),
+    ...(brief.supplementary ?? [])
+  ];
+  if (extras.length) {
     lines.push('', 'Additional real experience the candidate has confirmed (beyond the CV):');
-    for (const s of brief.supplementary) lines.push(`- ${s}`);
+    for (const s of extras) lines.push(`- ${s}`);
   }
 
   return lines.join('\n');
@@ -278,7 +293,7 @@ export async function chatRefineBrief(jobId, userText, signal) {
 
   const system = buildSystemBlocks([
     { text: CHAT_INSTRUCTIONS, cache: true },
-    { text: `CANDIDATE CV:\n\n${brief.cvText || ''}`, cache: true }
+    { text: `CANDIDATE CV:\n\n${withAdditional(brief.cvText || '', brief.additionalDetails || '')}`, cache: true }
   ]);
 
   const messages = [

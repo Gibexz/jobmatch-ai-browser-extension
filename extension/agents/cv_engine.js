@@ -22,8 +22,24 @@
 import { callClaude, streamClaude, parseJSON, buildSystemBlocks } from '../utils/claude_api.js';
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
-const KEY_CVS       = 'cvs';
-const KEY_ACTIVE_CV = 'activeCVId';
+const KEY_CVS        = 'cvs';
+const KEY_ACTIVE_CV  = 'activeCVId';
+const KEY_ADDITIONAL = 'additionalCVDetails';
+
+// ── Additional CV details ─────────────────────────────────────────────────────
+// Optional free-text supplement for real experience/skills not present in the
+// uploaded CV. Applied alongside the active CV wherever a consumer opts in.
+
+/** @returns {Promise<string>} the saved additional details, or ''. */
+export async function getAdditionalDetails() {
+  const r = await chrome.storage.local.get(KEY_ADDITIONAL);
+  return r[KEY_ADDITIONAL] ?? '';
+}
+
+/** Saves (or clears) the additional CV details. */
+export async function setAdditionalDetails(text) {
+  await chrome.storage.local.set({ [KEY_ADDITIONAL]: (text ?? '').trim() });
+}
 
 // ── PDF.js initialisation ─────────────────────────────────────────────────────
 

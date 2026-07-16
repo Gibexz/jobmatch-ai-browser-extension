@@ -5,7 +5,7 @@
  */
 
 import { getActiveCV, getCVList, uploadCV, setActiveCV, deleteCV, renameCV,
-         exportCVData, importCVData }
+         exportCVData, importCVData, getAdditionalDetails, setAdditionalDetails }
   from '../agents/cv_engine.js';
 
 import { getPersonalDetails, savePersonalDetails,
@@ -194,6 +194,13 @@ let _parsedCVText = '';
 
 async function initCVManagement() {
   await renderCVList();
+
+  // Additional details — optional free-text supplement to the active CV
+  $('cv-additional').value = await getAdditionalDetails();
+  $('btn-save-additional').addEventListener('click', async () => {
+    await setAdditionalDetails($('cv-additional').value);
+    showConfirm('confirm-save-additional');
+  });
 
   // File picker → extract text on selection
   $('cv-file').addEventListener('change', async e => {

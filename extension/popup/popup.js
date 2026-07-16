@@ -1209,6 +1209,7 @@ async function buildBriefHandler() {
   try {
     const brief = await buildAlignmentBrief(jobId, jobFiles, {
       cvFile, cvLabel,
+      includeAdditionalDetails: $('strat-include-additional').checked,
       jobTitle: job?.title || '',
       company:  job?.company || '',
       signal

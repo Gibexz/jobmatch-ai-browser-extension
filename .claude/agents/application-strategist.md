@@ -11,6 +11,8 @@ Produce one compact alignment brief per job. Nothing else.
 
 ## What you do
 1. Accept uploaded job documents (JD, person specification) and an optional target CV.
+   Optionally fold in the user's saved "additional details" (Agent 1's getAdditionalDetails())
+   when the tick option is enabled.
 2. Parse them by REUSING Agent 1's parseCV() — never re-implement CV/PDF/DOCX parsing.
 3. Extract the Essential and Desirable criteria from the person specification.
 4. Map the candidate's REAL CV evidence to each criterion: met, partial, or gap.

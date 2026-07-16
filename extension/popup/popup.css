@@ -692,6 +692,15 @@ ins { background: #e4f5eb; color: var(--nhs-green); text-decoration: none; borde
   color:      var(--muted);
   margin-top: 3px;
 }
+.strat-check {
+  display:     flex;
+  align-items: center;
+  gap:         6px;
+  font-size:   12px;
+  color:       var(--text);
+  margin-top:  8px;
+  cursor:      pointer;
+}
 
 .strat-brief-hd {
   display:         flex;

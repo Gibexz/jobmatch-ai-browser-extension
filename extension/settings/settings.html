@@ -92,6 +92,23 @@
           <div class="empty-state" id="cv-empty">No CVs stored yet.</div>
         </div>
       </div>
+
+      <div class="sub-section">
+        <h3>Additional details (optional)</h3>
+        <div class="field-hint" style="margin-bottom:8px;">
+          Real experience, skills, or context that isn't captured in the CV you upload.
+          Applied alongside your active CV wherever a feature opts in (e.g. the Application Strategist).
+        </div>
+        <div class="field-group">
+          <textarea id="cv-additional" rows="5"
+                    placeholder="e.g. Led a 2-year data migration managing 5 analysts; fluent in SQL and Python; completed PRINCE2 training…"
+                    aria-label="Additional CV details"></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" id="btn-save-additional">Save details</button>
+          <span class="save-confirm hidden" id="confirm-save-additional">✓ Saved</span>
+        </div>
+      </div>
     </section>
 
     <!-- ── 3. Personal Details Vault ────────────────────────────────────────── -->
