@@ -115,6 +115,20 @@ function newAbort() {
 
 const SESSION_KEY          = 'jm_sessionCache';
 const AUTO_RESTORE_MINS    = 10;
+const SESSION_CACHE_MAX    = 10;   // per-URL analysis entries kept (LRU by timestamp)
+
+/**
+ * Reads the session cache as a { url: entry } map, migrating the old single-entry
+ * format transparently so upgrades don't lose the last cached analysis.
+ */
+async function getSessionCacheMap() {
+  const r   = await chrome.storage.local.get(SESSION_KEY).catch(() => ({}));
+  const val = r[SESSION_KEY];
+  if (!val || typeof val !== 'object') return {};
+  // Old format was a single entry with top-level url/ts — wrap it into a map
+  if (typeof val.url === 'string' && typeof val.ts === 'number') return { [val.url]: val };
+  return val;
+}
 const ANALYSED_JOBS_KEY    = 'jm_analysedJobs';
 const ANALYSED_JOBS_MAX    = 10;
 
@@ -162,15 +176,17 @@ async function getAnalysedJobs() {
 }
 
 /**
- * Persists the current analysis state keyed by the active page URL.
- * Saves whenever any meaningful result exists so Sponsorship-only sessions
- * are also captured (not just CV match sessions).
+ * Persists the current analysis state keyed by the active page URL. One entry is kept
+ * per job page (up to SESSION_CACHE_MAX, LRU by timestamp), so switching between several
+ * open job tabs retains each job's result. Saves whenever any meaningful result exists so
+ * Sponsorship-only sessions are also captured (not just CV match sessions).
  */
 async function saveSessionCache() {
   if (!state.currentTab?.url) return;
   if (!state.matchResult && !state.sponsorshipVerdict && !state.annotatedFields) return;
+  const url   = state.currentTab.url;
   const entry = {
-    url:                state.currentTab.url,
+    url,
     ts:                 Date.now(),
     jobData:            state.jobData,
     matchResult:        state.matchResult,
@@ -182,16 +198,27 @@ async function saveSessionCache() {
     formFields:         state.formFields ?? null,
     annotatedFields:    state.annotatedFields ?? null
   };
-  await chrome.storage.local.set({ [SESSION_KEY]: entry });
+
+  const map = await getSessionCacheMap();
+  map[url] = entry;
+
+  // LRU eviction — drop the oldest entries once over the cap
+  const urls = Object.keys(map);
+  if (urls.length > SESSION_CACHE_MAX) {
+    urls.sort((a, b) => (map[a].ts ?? 0) - (map[b].ts ?? 0)); // oldest first
+    for (const u of urls.slice(0, urls.length - SESSION_CACHE_MAX)) delete map[u];
+  }
+
+  await chrome.storage.local.set({ [SESSION_KEY]: map });
 }
 
-/** On popup open: check if there's a cached session for the current URL. */
+/** On popup open: restore the cached analysis for the current URL, if any. */
 async function checkAndRestoreSession() {
-  const r     = await chrome.storage.local.get(SESSION_KEY).catch(() => ({}));
-  const cache = r[SESSION_KEY];
-  if (!cache || cache.url !== state.currentTab?.url) return;
+  const map   = await getSessionCacheMap();
+  const cache = map[state.currentTab?.url];
+  if (!cache) return;
 
-  // Restore if we have at least one meaningful result (any tab)
+  // Restore if we have at least one meaningful result
   const hasData = cache.matchResult || cache.sponsorshipVerdict || cache.annotatedFields;
   if (!hasData) return;
 
@@ -267,7 +294,10 @@ function showRestoreBanner(cache, ageMins) {
   });
   document.getElementById('btn-restore-no').addEventListener('click', async () => {
     banner.remove();
-    await chrome.storage.local.remove(SESSION_KEY);
+    // Drop only this URL's entry — keep every other job's cached analysis
+    const map = await getSessionCacheMap();
+    delete map[state.currentTab?.url];
+    await chrome.storage.local.set({ [SESSION_KEY]: map });
   });
 }
 
