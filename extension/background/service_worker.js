@@ -8,7 +8,8 @@
  *   - Extension install / update → set up recurring alarm
  */
 
-import { isKnownSite, checkJobAlerts } from '../agents/site_registry.js';
+import { isKnownSite, checkJobAlerts, getCustomSites, registerCustomSiteScript }
+  from '../agents/site_registry.js';
 import { getApplications }             from '../agents/job_tracker.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -17,12 +18,34 @@ const ALERT_INTERVAL_MINS = 30;
 
 // ── Install / update ──────────────────────────────────────────────────────────
 
+/**
+ * Re-registers content scripts for every custom-added job site.
+ *
+ * Chrome WIPES all dynamically registered content scripts whenever the extension is
+ * reloaded or updated, and never restores them. Without this, each custom site the user
+ * added silently stops being scanned after any reload — the site still appears in the
+ * registry, so it looks supported while extraction quietly returns nothing.
+ */
+async function restoreCustomSiteScripts() {
+  try {
+    const sites = await getCustomSites();
+    for (const site of sites) {
+      // Duplicate registrations are caught and ignored inside registerCustomSiteScript
+      await registerCustomSiteScript(site);
+    }
+  } catch (err) {
+    console.warn('[service_worker] Could not restore custom site scripts:', err?.message);
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   // Set up the recurring job alert check alarm
   chrome.alarms.create(ALERT_ALARM_NAME, {
     delayInMinutes:  1,              // first check 1 min after install
     periodInMinutes: ALERT_INTERVAL_MINS
   });
+  // Reload/update wiped the dynamic registrations — put them back
+  restoreCustomSiteScripts();
 });
 
 // MV3 service workers can be terminated at any time; recreate the alarm on wake-up if it was cleared.
@@ -34,6 +57,7 @@ chrome.runtime.onStartup.addListener(async () => {
       periodInMinutes: ALERT_INTERVAL_MINS
     });
   }
+  restoreCustomSiteScripts();
 });
 
 // ── Message handler ───────────────────────────────────────────────────────────
