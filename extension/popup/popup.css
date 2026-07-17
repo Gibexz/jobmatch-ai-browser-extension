@@ -211,6 +211,30 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .cv-bar .cv-label { color: var(--muted); }
 .cv-bar .cv-name  { font-weight: 600; color: var(--nhs-blue); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ─── Optional job documents (Job Analysis) ──────────────────────────────────── */
+.jobdoc-wrap {
+  margin-bottom: 12px;
+  padding:       8px 10px;
+  background:    var(--surface);
+  border:        1px solid var(--border);
+  border-radius: var(--radius);
+}
+.jobdoc-label {
+  display:     block;
+  font-size:   12px;
+  font-weight: 600;
+  color:       var(--nhs-blue);
+  margin-bottom: 4px;
+}
+.jobdoc-file  { width: 100%; font-size: 12px; }
+.jobdoc-hint  { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+.jobdoc-status {
+  font-size:   11.5px;
+  color:       var(--nhs-green);
+  font-weight: 600;
+  margin-top:  5px;
+}
+
 /* ─── Score card ─────────────────────────────────────────────────────────────── */
 .score-card {
   display:        flex;

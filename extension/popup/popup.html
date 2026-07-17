@@ -53,6 +53,15 @@
         <button class="btn-ghost btn-sm" id="btn-change-cv">Change</button>
       </div>
 
+      <!-- Optional job documents -->
+      <div class="jobdoc-wrap">
+        <label class="jobdoc-label" for="job-docs">Job documents (optional)</label>
+        <input type="file" id="job-docs" class="jobdoc-file" multiple accept=".pdf,.docx,.txt"
+               aria-label="Upload job documents (JD / person specification)" />
+        <div class="jobdoc-hint">Upload the JD / person spec when the advert refers to attached documents, or the page has little detail. Their content is included in the analysis.</div>
+        <div class="jobdoc-status hidden" id="jobdoc-status" role="status"></div>
+      </div>
+
       <!-- Analyse button -->
       <div class="action-row">
         <button class="btn-primary" id="btn-analyse">Analyse this job</button>

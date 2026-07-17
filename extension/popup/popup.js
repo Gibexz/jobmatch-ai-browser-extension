@@ -8,7 +8,7 @@
 
 // ── Agent imports ─────────────────────────────────────────────────────────────
 import { getActiveCV, matchCV, optimiseCV, saveOptimisedCV,
-         generateStatement, generateCoverLetter, getCVList }
+         generateStatement, generateCoverLetter, getCVList, parseCV }
   from '../agents/cv_engine.js';
 
 import { scanCurrentForm, generateAnswers, reanalyseField, fillForm as fillFormContent, saveCorrection }
@@ -385,6 +385,30 @@ function wireJobAnalysis() {
   });
 }
 
+/** Parses uploaded job-document files (PDF/DOCX/TXT) into one text block; '' if none. */
+async function parseJobDocs(fileList) {
+  const files = Array.from(fileList ?? []);
+  if (!files.length) return '';
+  const texts = [];
+  for (const f of files) {
+    try {
+      const t = await parseCV(f);
+      if (t) texts.push(`=== ${f.name} ===\n${t}`);
+    } catch (err) {
+      console.warn('[job-docs] could not parse', f.name, err?.message);
+    }
+  }
+  const combined = texts.join('\n\n');
+  const status = $('jobdoc-status');
+  if (status) {
+    status.textContent = combined
+      ? `✓ ${files.length} document${files.length > 1 ? 's' : ''} included (${combined.length.toLocaleString()} chars)`
+      : 'Could not read the uploaded document(s).';
+    status.classList.remove('hidden');
+  }
+  return combined;
+}
+
 async function analyseJob() {
   clearError('error-analyse-msg');
   hide('results-job-analysis');
@@ -406,6 +430,16 @@ async function analyseJob() {
       }
     }
 
+    // 1b. Fold in any uploaded job documents (for adverts that just refer to attachments,
+    //     or pages with little detail). Their text is merged into the job description so
+    //     matching, optimise, document generation, and the recorded job all use it.
+    const docsText = await parseJobDocs($('job-docs').files);
+    if (docsText) {
+      if (!jobData) jobData = { title: '', company: '', descriptionText: '' };
+      jobData.descriptionText = [jobData.descriptionText, docsText].filter(Boolean).join('\n\n');
+      state.jobData = jobData;
+    }
+
     // 2. Match CV
     const jobText = [
       jobData?.title, jobData?.company,
@@ -414,8 +448,8 @@ async function analyseJob() {
 
     if (!jobText) {
       throw new Error(
-        'No job description found on this page. Navigate to a specific job listing, ' +
-        'or paste job text by using the CV engine directly.'
+        'No job description found. Navigate to a specific job listing, or upload the ' +
+        'job documents below (e.g. when the advert refers to attached documents).'
       );
     }
 
