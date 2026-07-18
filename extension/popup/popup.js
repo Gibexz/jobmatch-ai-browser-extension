@@ -1160,6 +1160,16 @@ function wireStrategist() {
   $('btn-delete-brief').addEventListener('click', deleteBriefHandler);
   // Changing the selected job loads that job's existing brief (or clears the view)
   $('strat-job-select').addEventListener('change', loadBriefForSelectedJob);
+  // Supporting statement built from the brief
+  $('btn-strat-statement').addEventListener('click', stratStatementHandler);
+  $('btn-strat-statement-save').addEventListener('click', stratStatementSaveHandler);
+  $('btn-strat-statement-cancel').addEventListener('click', () => {
+    state.activeAbort?.abort();
+    hideSpinner('spinner-strat-statement');
+    hide('btn-strat-statement-cancel');
+    setDisabled('btn-strat-statement', false);
+  });
+
   // Refinement chat
   $('btn-strat-chat-send').addEventListener('click', stratChatSendHandler);
   $('strat-chat-input').addEventListener('keydown', e => {
@@ -1359,8 +1369,78 @@ function renderBrief(brief) {
     gapsEl.classList.add('hidden');
   }
 
+  // Clear the statement only when a *different* brief is shown — not on same-brief
+  // re-renders (e.g. after a chat message), so a generated statement isn't lost.
+  if (_statementBriefId !== brief.id) {
+    resetStratStatement();
+    _statementBriefId = brief.id;
+  }
   renderChat(brief);
   show('strat-results');
+}
+
+let _statementBriefId = null;
+
+/** Resets the supporting-statement area (called when a different brief is shown). */
+function resetStratStatement() {
+  const out = $('strat-statement-output');
+  if (out) out.value = '';
+  hide('strat-statement-output');
+  hide('strat-statement-save-row');
+  hide('btn-strat-statement-cancel');
+  hideSpinner('spinner-strat-statement');
+  setDisabled('btn-strat-statement', false);
+}
+
+/** Generates a supporting statement from the current brief (streamed). */
+async function stratStatementHandler() {
+  const brief = state.currentBrief;
+  if (!brief) return;
+
+  // Prefer the analysed job's full description; fall back to the brief's own content
+  const jobs    = await getAnalysedJobs();
+  const job     = jobs.find(j => j.id === brief.jobId);
+  const jobText = job?.descriptionText
+    || [brief.company, brief.jobTitle, ...brief.criteria.map(c => c.text)].filter(Boolean).join('\n');
+
+  const output = $('strat-statement-output');
+  output.value = '';
+  show('strat-statement-output');
+  showSpinner('spinner-strat-statement');
+  show('btn-strat-statement-cancel');
+  hide('strat-statement-save-row');
+  setDisabled('btn-strat-statement', true);
+
+  const signal = newAbort();
+  try {
+    await generateStatement(jobText, {
+      signal,
+      briefContext: briefToContext(brief), // tailor to criteria + evidence + added experience
+      onChunk: chunk => { output.value += chunk; output.scrollTop = output.scrollHeight; }
+    });
+    show('strat-statement-save-row');
+  } catch (err) {
+    if (err.name !== 'AbortError') alert(extractErrorMessage(err));
+  } finally {
+    hideSpinner('spinner-strat-statement');
+    hide('btn-strat-statement-cancel');
+    setDisabled('btn-strat-statement', false);
+  }
+}
+
+async function stratStatementSaveHandler() {
+  const text = $('strat-statement-output').value.trim();
+  if (!text) return;
+  const b     = state.currentBrief;
+  const label = `Statement — ${[b?.company, b?.jobTitle].filter(Boolean).join(' ') || 'Unnamed'}`;
+  chrome.storage.local.get('savedDocs', r => {
+    const docs = r.savedDocs || [];
+    docs.push({ id: crypto.randomUUID(), label, text, date: new Date().toISOString() });
+    chrome.storage.local.set({ savedDocs: docs });
+  });
+  const btn = $('btn-strat-statement-save');
+  btn.textContent = '✓ Saved';
+  setTimeout(() => { btn.textContent = 'Save statement'; }, 2000);
 }
 
 /** Renders the refinement chat history for a brief. */

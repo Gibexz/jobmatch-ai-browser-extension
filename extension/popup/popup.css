@@ -815,6 +815,13 @@ ins { background: #e4f5eb; color: var(--nhs-green); text-decoration: none; borde
 }
 .strat-gaps ul { margin: 4px 0 0 16px; }
 
+/* ── Strategist supporting statement ─────────────────────────────────────────── */
+.strat-statement {
+  margin-top:  12px;
+  padding-top: 10px;
+  border-top:  2px solid var(--border);
+}
+
 /* ── Strategist refinement chat ──────────────────────────────────────────────── */
 .strat-chat {
   margin-top:  12px;

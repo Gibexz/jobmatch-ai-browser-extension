@@ -276,6 +276,26 @@
         <div id="strat-criteria" class="strat-criteria"></div>
         <div id="strat-gaps" class="strat-gaps"></div>
 
+        <!-- Supporting statement built from this brief -->
+        <div class="strat-statement" id="strat-statement">
+          <div class="strat-chat-hd">Supporting statement</div>
+          <div class="strat-chat-note">
+            Generate a supporting statement tailored to this brief — its criteria, your mapped
+            evidence, and any experience you add below.
+          </div>
+          <div class="action-row">
+            <button class="btn-primary btn-sm" id="btn-strat-statement">Build supporting statement</button>
+            <div class="spinner hidden" id="spinner-strat-statement"></div>
+            <button class="btn-ghost btn-sm hidden" id="btn-strat-statement-cancel">Cancel</button>
+          </div>
+          <textarea class="doc-output hidden" id="strat-statement-output" rows="10"
+                    placeholder="Generated supporting statement will appear here — edit before saving."
+                    aria-label="Supporting statement"></textarea>
+          <div class="action-row hidden" id="strat-statement-save-row">
+            <button class="btn-primary btn-sm" id="btn-strat-statement-save">Save statement</button>
+          </div>
+        </div>
+
         <!-- Refinement chat — add real experience the CV missed -->
         <div class="strat-chat" id="strat-chat">
           <div class="strat-chat-hd">Add experience the brief missed</div>
